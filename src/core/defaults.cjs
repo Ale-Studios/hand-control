@@ -7,6 +7,7 @@ const DEFAULTS = {
     deviceId: '',          // vuoto = fotocamera predefinita
     distance: 'near',      // near | mid | far  (vedi DISTANCE_PRESETS)
     mirror: true,          // anteprima a specchio (consigliato)
+    delegate: 'auto',      // auto = scheda video (GPU) e, se non va, processore | GPU | CPU
   },
   control: {
     hand: 'any',           // any | right | left

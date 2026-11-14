@@ -74,10 +74,11 @@ export class Tracker {
     } catch { return []; }
   }
 
-  async start({ deviceId, preset, numHands = 1 }) {
+  async start({ deviceId, preset, numHands = 1, delegate = 'auto' }) {
     await this.stop();
     this.preset = preset;
     this.numHands = numHands;
+    this.wantDelegate = String(delegate || 'auto').toUpperCase();
     this.hooks.onStatus('starting', 'Accendo la fotocamera…');
     const video = {
       width: { ideal: preset.width }, height: { ideal: preset.height }, frameRate: { ideal: 30, max: 30 },
@@ -122,6 +123,7 @@ export class Tracker {
       minHandPresenceConfidence: 0.5,
       minTrackingConfidence: 0.5,
     });
+    if (this.wantDelegate === 'CPU') { this.landmarker = await make('CPU'); this.delegate = 'CPU'; return; }
     try { this.landmarker = await make('GPU'); this.delegate = 'GPU'; }
     catch (e) { console.warn('GPU non disponibile, uso la CPU', e); this.landmarker = await make('CPU'); this.delegate = 'CPU'; }
   }

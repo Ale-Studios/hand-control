@@ -111,6 +111,7 @@ const stat = {
   latParts: [],           // {cam, proc, ipc}
   acks: new Map(),
   seq: 0,
+  totalFrames: 0,
 };
 const keep = (a, n) => { while (a.length > n) a.shift(); };
 
@@ -183,6 +184,8 @@ function onEngineEvent(e) {
 let lastHudSend = 0;
 function onFrame(frame) {
   lastFrame = frame;
+  stat.totalFrames++;
+  benchTick();
   const hud = engine.update(frame);
   lastHud = hud;
   const now = performance.now();
@@ -264,10 +267,21 @@ async function startCamera() {
     });
   }
   const preset = PRESETS[S.camera.distance] || PRESETS.near;
-  const ok = await tracker.start({ deviceId: S.camera.deviceId, preset, numHands: S.control.hand === 'any' ? 1 : 2 });
+  const ok = await tracker.start({ deviceId: S.camera.deviceId, preset, numHands: S.control.hand === 'any' ? 1 : 2, delegate: info.delegate || S.camera.delegate });
   if (ok) {
     const cams = await Tracker.listCameras();
     fillCameraSelect(cams);
+    // Rete di sicurezza: se la scheda video non produce nessun fotogramma entro 15 s, si passa al processore.
+    const framesBefore = stat.totalFrames;
+    clearTimeout(startCamera._t);
+    startCamera._t = setTimeout(() => {
+      if (cameraOn && stat.totalFrames === framesBefore && tracker.delegate === 'GPU') {
+        hc.log('La scheda video non risponde: passo al calcolo con il processore');
+        S.camera.delegate = 'CPU';
+        hc.setSettings({ camera: { delegate: 'CPU' } });
+        startCamera();
+      }
+    }, 15000);
   }
   refreshStatus();
 }
@@ -287,6 +301,7 @@ const SCHEMA = () => [
   { id: 'camera.distance', type: 'select', label: 'Distanza dalla fotocamera', restart: true,
     options: Object.entries(PRESETS).map(([k, v]) => [k, v.label]),
     help: 'Più sei lontano, più il programma ingrandisce attorno alla mano (serve una fotocamera 1080p).' },
+  { id: 'camera.delegate', type: 'select', label: 'Motore di calcolo', restart: true, options: [['auto', 'Automatico (scheda video, poi processore)'], ['GPU', 'Scheda video (GPU)'], ['CPU', 'Processore (CPU)']], help: 'Se vedi pochi fotogrammi al secondo, prova a cambiarlo.' },
   { id: 'ui.showSkeleton', type: 'check', label: 'Mostra lo scheletro della mano' },
   { id: 'ui.showArea', type: 'check', label: 'Mostra l\'area attiva' },
   { g: 'Cursore' },
@@ -621,7 +636,11 @@ async function init() {
 
   if (info.e2e) { wireE2E(); hc.log('RENDERER_READY'); return; }
   if (S.ui.startCamera) startCamera();
-  if (info.bench) setTimeout(() => { recStart(); }, 3000);
+}
+let benchArmed = false;
+function benchTick() {
+  // la prima elaborazione sulla GPU è lenta (compila i programmi): la registrazione parte 8 s dopo
+  if (info.bench && !benchArmed) { benchArmed = true; setTimeout(recStart, 8000); }
 }
 function showHotkeys(h) {
   $('hkKill').textContent = niceKey(h.kill) + (h.killOk ? ' ✔' : ' ✖ (non disponibile)');

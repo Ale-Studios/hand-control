@@ -16,6 +16,8 @@ const argv = process.argv.slice(1);
 const flag = (n) => argv.includes(n);
 const E2E = process.env.HC_E2E === '1';
 const BENCH = flag('--bench');
+const flagVal = (n) => { const a = argv.find((x) => x.startsWith(n + '=')); return a ? a.split('=')[1] : ''; };
+const DELEGATE = flagVal('--delegate').toUpperCase(); // prova: --delegate=CPU | GPU
 
 if (process.env.HC_USER_DATA) app.setPath('userData', process.env.HC_USER_DATA);
 
@@ -26,6 +28,9 @@ app.commandLine.appendSwitch('disable-background-timer-throttling');
 app.commandLine.appendSwitch('disable-backgrounding-occluded-windows');
 app.commandLine.appendSwitch('disable-features', 'CalculateNativeWinOcclusion');
 app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
+// Sui PC con due schede video (Intel + NVIDIA) Windows di solito dà a Electron quella debole.
+// Chiediamo quella potente; si può disattivare con HC_GPU=default.
+if (process.env.HC_GPU !== 'default') app.commandLine.appendSwitch('force_high_performance_gpu');
 
 // Le pagine dell'app vengono servite da un protocollo interno "hc://": è un contesto sicuro
 // (serve alla fotocamera) e permette al motore wasm di caricarsi senza internet.
@@ -84,6 +89,7 @@ let hud = { holdKind: null, holdProgress: 0, pose: 'none' };
 let win = null, overlay = null, tray = null;
 let quitting = false;
 let lastInputAt = 0;
+let lastHudAt = 0;
 let blockedRequests = 0;
 let killKeyOk = false, pauseKeyOk = false, killKeyUsed = '';
 const logLines = [];
@@ -270,7 +276,7 @@ function wireIpc() {
     return {
       settings, defaults: DEFAULTS, mode, presets: DISTANCE_PRESETS, screen: { w: s.w, h: s.h },
       hotkeys: hotkeyInfo(), log: logLines, blocked: blockedRequests,
-      info: { version: app.getVersion(), e2e: E2E, bench: BENCH, userData: app.getPath('userData'), displays: screen.getAllDisplays().length },
+      info: { delegate: DELEGATE, version: app.getVersion(), e2e: E2E, bench: BENCH, userData: app.getPath('userData'), displays: screen.getAllDisplays().length },
     };
   });
 
@@ -320,6 +326,7 @@ function wireIpc() {
 
   ipcMain.on('hud', (e, h) => {
     if (!fromMain(e) || !h) return;
+    lastHudAt = Date.now();
     const changed = handSeen !== !!h.hand || hud.holdKind !== h.holdKind || Math.abs((hud.holdProgress || 0) - (h.holdProgress || 0)) > 0.04 || hud.pose !== h.pose;
     handSeen = !!h.hand;
     hud = { holdKind: h.holdKind || null, holdProgress: +h.holdProgress || 0, pose: h.pose || 'none' };
@@ -351,11 +358,28 @@ function wireIpc() {
 // Se la finestra con la fotocamera si blocca mentre un tasto è premuto, lo rilasciamo noi.
 function startWatchdog() {
   setInterval(() => {
+    // La fotocamera risulta accesa ma non arrivano più immagini analizzate: per prudenza, pausa.
+    if (cameraState === 'on' && mode === 'active' && Date.now() - lastHudAt > 5000 && lastHudAt > 0) {
+      setMode('paused', 'la fotocamera non invia più immagini', 'auto');
+    }
     if (input.buttons.size && Date.now() - lastInputAt > 1500) {
       input.releaseAll();
       addLog('Tasto del mouse rilasciato dalla guardia (nessun segnale dalla fotocamera)');
     }
   }, 400).unref();
+}
+
+// ─────────────────────────── autotest (npm run build / installer) ───────────────────────────
+// `Hand Control.exe --selftest` controlla che tutto il necessario sia dentro l'app e si chiude.
+async function selfTest() {
+  const out = { koffi: false, mouse_api: false, scorciatoia: killKeyOk };
+  try { const v = input.virtual(); out.koffi = true; out.mouse_api = v.w > 0 && v.h > 0; } catch (e) { out.errore = String(e.message || e); }
+  for (const [k, u] of [['pagina', 'hc://app/index.html'], ['motore_gesti', 'hc://app/core/engine.mjs'], ['mediapipe', 'hc://app/vendor/vision_bundle.mjs'], ['wasm', 'hc://app/vendor/wasm/vision_wasm_internal.wasm'], ['modello', 'hc://app/models/hand_landmarker.task']]) {
+    try { const r = await session.defaultSession.fetch(u); out[k] = r.ok && (await r.arrayBuffer()).byteLength > 100; } catch { out[k] = false; }
+  }
+  const ok = Object.entries(out).every(([k, v]) => k === 'errore' || v === true || k === 'scorciatoia');
+  console.log('[selftest] ' + JSON.stringify(out));
+  app.exit(ok ? 0 : 1);
 }
 
 // ─────────────────────────── avvio ───────────────────────────
@@ -377,6 +401,11 @@ if (!gotLock) {
     if (!E2E) createTray();
     registerHotkeys();
     startWatchdog();
+    if (BENCH) {
+      setTimeout(() => app.getGPUInfo('basic')
+        .then((i) => console.log('[gpu] ' + JSON.stringify((i.gpuDevice || []).map((d) => ({ nome: d.deviceString, attiva: !!d.active })))))
+        .catch(() => {}), 8000);
+    }
     screen.on('display-metrics-changed', () => applyScreen());
     addLog('Hand Control avviato — IN PAUSA. Mano aperta ferma per attivare.');
     Object.defineProperty(api, 'mode', { get: () => mode, enumerable: true });
@@ -386,6 +415,7 @@ if (!gotLock) {
       nowMs, userData: () => app.getPath('userData'), cameraState: () => cameraState, handSeen: () => handSeen,
     });
     resolveReady(api);
+    if (flag('--selftest')) setTimeout(selfTest, 800);
   });
   app.on('window-all-closed', () => app.quit());
   app.on('before-quit', () => { quitting = true; });

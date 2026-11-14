@@ -3,8 +3,9 @@
 Controlla il PC **con le mani**, senza toccare mouse o tastiera, anche da qualche metro di distanza.
 Una fotocamera guarda la tua mano; **tutto resta sul tuo PC** (niente internet, niente cloud, niente registrazioni).
 
-> Stato: **MVP (v0.1)**. Funziona con "mani finte" nei test automatici e con la catena completa
-> fino al mouse vero; la precisione con la **tua** mano reale va ancora misurata (vedi *Misure*).
+> Stato: **MVP (v0.1)**. Provato con "mani finte" lungo tutta la catena fino al mouse vero (27 controlli
+> automatici superati, ritardo del software ~3 ms) e con la fotocamera reale (motore locale su GPU: 25 ms a immagine).
+> La precisione con la **tua** mano reale, soprattutto a 2–3 m, va ancora misurata: vedi [docs/MISURE.md](docs/MISURE.md).
 
 ## Cosa sa fare
 
@@ -45,9 +46,13 @@ Il controllo parte **sempre in pausa**: non muove nulla finché non fai tu il ge
 npm run dist
 ```
 
-crea `dist\Hand Control Setup 0.1.0.exe` (installer NSIS; puoi scegliere la cartella). Non è firmato digitalmente:
-al primo avvio Windows SmartScreen può mostrare «Windows ha protetto il PC» → *Ulteriori informazioni → Esegui comunque*.
+crea `dist\Hand Control Setup 0.1.0.exe` (installer NSIS da ~96 MB; puoi scegliere la cartella; crea collegamenti sul
+Desktop e nel menu Start). Non è firmato digitalmente: al primo avvio Windows SmartScreen può mostrare «Windows ha
+protetto il PC» → *Ulteriori informazioni → Esegui comunque*.
 Per provare solo la build senza installer: `npm run build` (crea `dist\win-unpacked\Hand Control.exe`).
+Controllo rapido di un'app costruita o installata: `"Hand Control.exe" --selftest` (verifica che mouse, motore, modello
+e file ci siano, stampa il risultato e si chiude con codice 0 se tutto è a posto).
+La build scarica da internet **solo** gli strumenti di costruzione di Electron/NSIS (una volta); l'app finita no.
 
 ## Permessi e sicurezza (cosa serve e cosa NON fa)
 
@@ -69,6 +74,10 @@ Per provare solo la build senza installer: `npm run build` (crea `dist\win-unpac
 * Se un'altra app usa già `Ctrl+Alt+K` (per esempio JARVIS), Hand Control prova `Ctrl+Alt+Shift+K` e lo scrive
   nel registro; il pulsante rosso e il pugno restano sempre disponibili.
 * Se muovi il **mouse vero**, la mano si ferma per ~1,5 s per non litigare con te.
+* Se la fotocamera risulta accesa ma smettono di arrivare immagini analizzate (5 s) mentre sei ATTIVO, l'app va in pausa da sola.
+* Su PC con due schede video l'app chiede a Windows di usare quella **potente** (sul PC di prova, con quella scelta da
+  Windows il riconoscimento non partiva); se la scheda video non risponde passa da sola al processore
+  (*Impostazioni → Fotocamera → Motore di calcolo* per sceglierlo a mano).
 
 ## A distanza (1–3 metri)
 
@@ -86,14 +95,16 @@ Scheda **Misure**:
 * **Test tremolio (5 s):** quanti pixel "balla" il cursore a mano ferma, prima e dopo lo smorzamento.
 * **Prova di precisione:** 9 bersagli da colpire col pizzico a schermo intero → errore medio in pixel e tempi.
 
-Da terminale, senza interfaccia: `npm run bench:camera` (accende la fotocamera 20 s, scrive i numeri, esce).
+Da terminale, senza interfaccia: `npm run bench:camera` (accende la fotocamera per ~35 s, scrive i numeri in
+un profilo isolato, esce; `npm run bench:camera -- --delegate=CPU` prova il processore al posto della scheda video).
 Risultati e come leggerli: [docs/MISURE.md](docs/MISURE.md).
 
 ## Provare che funziona (test automatici)
 
 ```bash
 npm test          # 17 prove sul "cervello" dei gesti con mani finte (veloci, nessuna fotocamera)
-npm run test:e2e  # prova completa: app vera → mouse vero → finestra che registra gli eventi
+npm run test:e2e  # prova completa: app vera → mouse vero → finestra che registra gli eventi (~3 min)
+HC_E2E_ONLY=dbl,kill npm run test:e2e   # solo alcune sezioni (dbl = doppio click, kill = emergenza, net = rete)
 ```
 
 `test:e2e` apre una finestra a schermo intero che **usa il mouse da sola per ~1 minuto** (non toccare nulla) in

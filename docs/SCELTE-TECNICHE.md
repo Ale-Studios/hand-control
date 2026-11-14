@@ -35,6 +35,10 @@ Amministratore. Per quelle serve avviare Hand Control anch'esso come Amministrat
 | Python + MediaPipe in un processo separato | ❌ Un secondo runtime da installare, comunicazione più lenta. |
 | Modello ONNX personalizzato | ❌ Molto lavoro per risultati simili; MediaPipe è già molto buono. |
 
+**Scheda video:** sui PC con due GPU (qui Intel UHD 630 + GTX 1650) l'app passa `force_high_performance_gpu`.
+Misurato sul PC di prova: GPU potente → 25 ms a immagine; processore → 67 ms; GPU scelta da Windows → il motore non è partito.
+Per disattivare la richiesta: variabile `HC_GPU=default`. Se non arrivano immagini entro 15 s si passa da soli al processore.
+
 Il modello (`assets/models/hand_landmarker.task`, ~7,8 MB, licenza Apache 2.0 di Google) e i file `wasm`
 sono serviti da un protocollo interno `hc://` (solo file locali).
 
