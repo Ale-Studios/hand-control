@@ -1,27 +1,27 @@
-// Fotocamera + MediaPipe. Tutto locale: il motore e il modello sono file dentro l'app.
-// Niente immagini escono da qui: i fotogrammi vengono guardati e subito dimenticati.
+// Camera + MediaPipe. Everything is local: the engine and the model are files inside the app.
+// No image ever leaves this file: frames are looked at and immediately forgotten.
 //
-// Per lavorare "a distanza" la mano deve restare abbastanza grande per il modello.
-// Il trucco (modalità 'follow'): chiediamo alla fotocamera 1080p e diamo al modello
-// solo un ritaglio attorno alla mano, che segue la mano mentre si muove.
+// To work "at a distance" the hand must stay big enough for the model.
+// The trick ('follow' mode): we ask the camera for 1080p and give the model only a crop
+// around the hand, which follows the hand as it moves.
 
 const VISION = 'hc://app/vendor/vision_bundle.mjs';
 const WASM = 'hc://app/vendor/wasm';
 const MODEL = 'hc://app/models/hand_landmarker.task';
 
-const MAX_SIDE = 640; // il ritaglio viene ridotto a questa misura: abbastanza per il modello, leggero per la GPU
+const MAX_SIDE = 640; // the crop is scaled down to this size: enough for the model, light for the GPU
 
-// Ritaglio che segue la mano.
+// Crop that follows the hand.
 class RoiFollower {
   constructor(minSide) {
-    this.minSide = minSide; // frazione dell'altezza
+    this.minSide = minSide; // fraction of the frame height
     this.cx = null; this.cy = null; this.side = null;
     this.miss = 0;
     this.search = 0;
   }
   pick(W, H) {
     if (this.cx == null || this.miss >= 3) {
-      // Niente mano: cerchiamo a giri (tutta l'immagine, poi il centro ingrandito, poi i lati)
+      // No hand: search in turns (whole frame, then zoomed centre, then the sides)
       const k = this.search++ % 4;
       if (k === 0) return { x: 0, y: 0, w: W, h: H };
       const w = Math.round(W * 0.5), h = Math.round(H * 0.5);
@@ -48,7 +48,7 @@ class RoiFollower {
 
 export class Tracker {
   /**
-   * @param video  <video> già nella pagina (anche per l'anteprima)
+   * @param video  <video> already in the page (also used for the preview)
    * @param hooks  { onFrame(frame), onStatus(state, msg) }
    */
   constructor(video, hooks) {
@@ -70,7 +70,7 @@ export class Tracker {
   static async listCameras() {
     try {
       const all = await navigator.mediaDevices.enumerateDevices();
-      return all.filter((d) => d.kind === 'videoinput').map((d, i) => ({ id: d.deviceId, label: d.label || `Fotocamera ${i + 1}` }));
+      return all.filter((d) => d.kind === 'videoinput').map((d, i) => ({ id: d.deviceId, label: d.label || `Camera ${i + 1}` }));
     } catch { return []; }
   }
 
@@ -79,7 +79,7 @@ export class Tracker {
     this.preset = preset;
     this.numHands = numHands;
     this.wantDelegate = String(delegate || 'auto').toUpperCase();
-    this.hooks.onStatus('starting', 'Accendo la fotocamera…');
+    this.hooks.onStatus('starting', 'Turning the camera on…');
     const video = {
       width: { ideal: preset.width }, height: { ideal: preset.height }, frameRate: { ideal: 30, max: 30 },
     };
@@ -87,25 +87,25 @@ export class Tracker {
     try {
       this.stream = await navigator.mediaDevices.getUserMedia({ video, audio: false });
     } catch (e) {
-      this.hooks.onStatus('error', 'Non riesco ad aprire la fotocamera (' + (e && e.name || 'errore') + '). È usata da un\'altra app o il permesso è negato?');
+      this.hooks.onStatus('error', 'Cannot open the camera (' + (e && e.name || 'error') + '). Is another app using it, or is permission denied?');
       return false;
     }
     this.video.srcObject = this.stream;
-    try { await this.video.play(); } catch { /* parte comunque */ }
-    this.stream.getVideoTracks()[0].addEventListener('ended', () => this.hooks.onStatus('error', 'La fotocamera si è scollegata.'));
+    try { await this.video.play(); } catch { /* it starts anyway */ }
+    this.stream.getVideoTracks()[0].addEventListener('ended', () => this.hooks.onStatus('error', 'The camera was disconnected.'));
 
-    this.hooks.onStatus('loading', 'Carico il motore di riconoscimento (locale)…');
+    this.hooks.onStatus('loading', 'Loading the recognition engine (local)…');
     try {
       await this._createLandmarker();
     } catch (e) {
       console.error(e);
-      this.hooks.onStatus('error', 'Il motore di riconoscimento non parte: ' + (e && e.message || e));
+      this.hooks.onStatus('error', 'The recognition engine failed to start: ' + (e && e.message || e));
       await this.stop();
       return false;
     }
     this.follower = preset.roi === 'follow' ? new RoiFollower(preset.minSide) : null;
     this.running = true;
-    this.hooks.onStatus('on', `Fotocamera accesa (${this.video.videoWidth}×${this.video.videoHeight}, ${this.delegate})`);
+    this.hooks.onStatus('on', `Camera on (${this.video.videoWidth}×${this.video.videoHeight}, ${this.delegate})`);
     this._schedule();
     return true;
   }
@@ -125,7 +125,7 @@ export class Tracker {
     });
     if (this.wantDelegate === 'CPU') { this.landmarker = await make('CPU'); this.delegate = 'CPU'; return; }
     try { this.landmarker = await make('GPU'); this.delegate = 'GPU'; }
-    catch (e) { console.warn('GPU non disponibile, uso la CPU', e); this.landmarker = await make('CPU'); this.delegate = 'CPU'; }
+    catch (e) { console.warn('GPU not available, using the CPU', e); this.landmarker = await make('CPU'); this.delegate = 'CPU'; }
   }
 
   _schedule() {
@@ -161,7 +161,7 @@ export class Tracker {
       for (let i = 0; i < lms.length; i++) {
         const lm = lms[i].map((p) => ({ x: (roi.x + p.x * roi.w) / W, y: (roi.y + p.y * roi.h) / H, z: p.z }));
         const cat = res.handedness && res.handedness[i] && res.handedness[i][0] && res.handedness[i][0].categoryName;
-        // MediaPipe assume un'immagine a specchio; la nostra non lo è → l'etichetta va scambiata.
+        // MediaPipe assumes a mirrored image; ours is not, so the label has to be swapped.
         const label = cat === 'Left' ? 'right' : cat === 'Right' ? 'left' : 'unknown';
         hands.push({ lm, wl: res.worldLandmarks && res.worldLandmarks[i], label, score: res.handedness && res.handedness[i] && res.handedness[i][0] && res.handedness[i][0].score });
       }
@@ -173,12 +173,12 @@ export class Tracker {
         t: tCap,
         hands,
         meta: {
-          tCapEpoch: origin + tCap,        // quando la fotocamera ha scattato (ms, epoca)
-          tStartEpoch: origin + tStart,    // quando abbiamo iniziato a elaborare
-          tDoneEpoch: origin + tDone,      // quando il modello ha finito
+          tCapEpoch: origin + tCap,        // when the camera took the picture (ms, epoch)
+          tStartEpoch: origin + tStart,    // when we started processing
+          tDoneEpoch: origin + tDone,      // when the model finished
           inferMs: tDone - tStart,
           roi, W, H,
-          captureLagMs: tStart - tCap,     // ritardo fotocamera→app
+          captureLagMs: tStart - tCap,     // camera → app delay
         },
       });
     } catch (e) {

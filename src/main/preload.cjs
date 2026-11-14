@@ -1,4 +1,4 @@
-// Ponte sicura tra la finestra e il processo principale: solo queste funzioni, nient'altro.
+// Safe bridge between the window and the main process: only these functions, nothing else.
 const { contextBridge, ipcRenderer } = require('electron');
 
 const on = (ch, cb) => {

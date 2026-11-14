@@ -1,4 +1,4 @@
-// Genera l'icona dell'app (assets/icon.png + build/icon.ico) senza strumenti esterni.
+// Generates the app icon (assets/icon.png + build/icon.ico) without external tools.
 const fs = require('fs');
 const path = require('path');
 const { pngFor, icoFrom } = require('../src/main/icons.cjs');
@@ -10,4 +10,4 @@ const sizes = [16, 32, 48, 64, 128, 256];
 const pngs = sizes.map((size) => ({ size, data: pngFor('brand', size) }));
 fs.writeFileSync(path.join(root, 'assets', 'icon.png'), pngFor('brand', 256));
 fs.writeFileSync(path.join(root, 'build', 'icon.ico'), icoFrom(pngs));
-console.log('Icone scritte in assets/icon.png e build/icon.ico');
+console.log('Icons written to assets/icon.png and build/icon.ico');

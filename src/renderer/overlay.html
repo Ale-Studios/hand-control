@@ -1,47 +1,48 @@
 <!doctype html>
-<html lang="it">
+<html lang="en">
 <head>
 <meta charset="utf-8" />
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'self' 'unsafe-inline'" />
 <style>
-  html, body { margin: 0; background: transparent; overflow: hidden; font-family: "Segoe UI", system-ui, sans-serif; user-select: none; }
+  html, body { margin: 0; background: transparent; overflow: hidden; font-family: Bahnschrift, "Segoe UI", system-ui, sans-serif; user-select: none; }
   #badge {
-    margin: 4px; height: 52px; border-radius: 26px; box-sizing: border-box;
-    background: rgba(15, 20, 32, .92); border: 2px solid var(--c, #64748b);
-    display: flex; align-items: center; gap: 10px; padding: 0 16px; color: #e8edf7;
-    box-shadow: 0 4px 18px rgba(0,0,0,.45); position: relative; overflow: hidden;
+    margin: 4px; height: 52px; border-radius: 6px; box-sizing: border-box;
+    background: linear-gradient(180deg, rgba(40,44,50,.96), rgba(24,27,31,.96)); border: 1px solid var(--c, #6b7380);
+    display: flex; align-items: center; gap: 10px; padding: 0 16px; color: #e8ebef;
+    box-shadow: 0 4px 18px rgba(0,0,0,.5), inset 0 1px 0 rgba(255,255,255,.07), 0 0 12px color-mix(in srgb, var(--c, #6b7380) 25%, transparent);
+    position: relative; overflow: hidden;
   }
-  #dot { width: 14px; height: 14px; border-radius: 50%; background: var(--c, #64748b); box-shadow: 0 0 10px var(--c, #64748b); flex: none; }
-  #txt { font-size: 14px; font-weight: 700; letter-spacing: .04em; white-space: nowrap; }
-  #sub { font-size: 11px; opacity: .75; white-space: nowrap; }
+  #dot { width: 12px; height: 12px; border-radius: 50%; background: var(--c, #6b7380); box-shadow: 0 0 10px var(--c, #6b7380); flex: none; }
+  #txt { font-size: 14px; font-weight: 600; letter-spacing: .14em; white-space: nowrap; }
+  #sub { font-size: 11px; opacity: .72; white-space: nowrap; letter-spacing: .03em; }
   #col { display: flex; flex-direction: column; line-height: 1.15; min-width: 0; }
-  #cam { margin-left: auto; display: flex; align-items: center; gap: 5px; font-size: 11px; opacity: .9; flex: none; }
-  #camdot { width: 9px; height: 9px; border-radius: 50%; background: #475569; }
+  #cam { margin-left: auto; display: flex; align-items: center; gap: 5px; font-size: 11px; letter-spacing: .08em; opacity: .9; flex: none; }
+  #camdot { width: 9px; height: 9px; border-radius: 50%; background: #4b525c; }
   #camdot.on { background: #ef4444; box-shadow: 0 0 8px #ef4444; animation: p 1.6s infinite; }
   @keyframes p { 50% { opacity: .35; } }
-  #bar { position: absolute; left: 0; bottom: 0; height: 4px; width: 0; background: var(--c, #64748b); transition: width .08s linear; }
+  #bar { position: absolute; left: 0; bottom: 0; height: 3px; width: 0; background: var(--c, #6b7380); transition: width .08s linear; }
 </style>
 </head>
 <body>
 <div id="badge"><div id="dot"></div><div id="col"><div id="txt">…</div><div id="sub"></div></div>
   <div id="cam"><div id="camdot"></div><span id="camtxt">cam</span></div><div id="bar"></div></div>
 <script>
-  const C = { active: '#22c55e', paused: '#eab308', locked: '#ef4444', nohand: '#64748b' };
+  const C = { active: '#3ddc97', paused: '#f2b84b', locked: '#ef5350', nohand: '#9aa3af' };
   const $ = (i) => document.getElementById(i);
   function render(s) {
     let key = s.mode, txt, sub = '';
     if (s.mode === 'active') {
-      txt = 'ATTIVO'; sub = s.hand ? 'mano vista' : 'mano non vista';
+      txt = 'ACTIVE'; sub = s.hand ? 'hand seen' : 'hand not seen';
       if (!s.hand) key = 'nohand';
     } else if (s.mode === 'paused') {
-      txt = 'IN PAUSA'; sub = s.hand ? 'mano aperta ferma = attiva' : 'mano non vista';
-    } else { txt = 'BLOCCATO'; sub = 'sblocca con Ctrl+Alt+K'; }
-    if (s.holdKind === 'toggle' && s.holdProgress > 0.05) sub = s.mode === 'active' ? 'tieni ferma… pausa' : 'tieni ferma… attivo';
-    if (s.holdKind === 'lock' && s.holdProgress > 0.05) { sub = 'pugno… BLOCCO'; }
+      txt = 'PAUSED'; sub = s.hand ? 'open hand held still = activate' : 'hand not seen';
+    } else { txt = 'LOCKED'; sub = 'unlock with Ctrl+Alt+K'; }
+    if (s.holdKind === 'toggle' && s.holdProgress > 0.05) sub = s.mode === 'active' ? 'hold still… pause' : 'hold still… activate';
+    if (s.holdKind === 'lock' && s.holdProgress > 0.05) { sub = 'fist… LOCK'; }
     document.documentElement.style.setProperty('--c', C[key]);
     $('txt').textContent = txt; $('sub').textContent = sub;
     $('camdot').className = s.camera === 'on' ? 'on' : '';
-    $('camtxt').textContent = s.camera === 'on' ? 'CAMERA' : s.camera === 'error' ? 'ERRORE' : 'cam spenta';
+    $('camtxt').textContent = s.camera === 'on' ? 'CAMERA' : s.camera === 'error' ? 'ERROR' : 'cam off';
     $('bar').style.width = (s.holdKind && s.holdProgress > 0.05 ? Math.round(s.holdProgress * 100) : 0) + '%';
   }
   if (window.overlayAPI) overlayAPI.onState(render);

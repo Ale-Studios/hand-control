@@ -1,10 +1,10 @@
-// Mouse e tastiera "veri" su Windows, tramite la funzione di sistema SendInput
-// (user32.dll) chiamata direttamente con `koffi`: nessun processo esterno,
-// nessun PowerShell, nessuna compilazione al volo. Ogni mossa costa ~0,05 ms.
+// Real mouse and keyboard on Windows, through the system function SendInput
+// (user32.dll) called directly with `koffi`: no external process, no PowerShell,
+// no on-the-fly compilation. Each move costs ~0.05 ms.
 //
-// Limite di Windows: un programma normale NON può "toccare" finestre avviate
-// come Amministratore (UIPI). Per quelle serve avviare anche Hand Control come
-// Amministratore. Lo scriviamo nel README.
+// Windows limit: a normal program CANNOT "touch" windows started as Administrator
+// (UIPI). For those, Hand Control must also be started as Administrator.
+// This is documented in the README.
 
 const koffi = require('koffi');
 
@@ -34,7 +34,7 @@ const MOUSEEVENTF = {
 };
 const KEYEVENTF_KEYUP = 0x0002;
 const SIZE = koffi.sizeof(INPUT);
-const MAGIC = 0x48434f4e; // "HCON": firma delle nostre mosse (dwExtraInfo)
+const MAGIC = 0x48434f4e; // "HCON": signature of our own moves (dwExtraInfo)
 
 function sendMouse(flags, data = 0, dx = 0, dy = 0) {
   return SendInput(1, [{ type: 0, u: { mi: { dx, dy, mouseData: data >>> 0, dwFlags: flags, time: 0, dwExtraInfo: MAGIC } } }], SIZE);
@@ -42,15 +42,15 @@ function sendMouse(flags, data = 0, dx = 0, dy = 0) {
 
 class Input {
   constructor() {
-    this.buttons = new Set();   // tasti del mouse che abbiamo premuto noi
-    this.screen = null;         // rettangolo (in pixel fisici) dello schermo di destinazione
-    this.lastPos = null;        // dove abbiamo messo noi il cursore l'ultima volta
-    this.suspendUntil = 0;      // se l'utente usa il mouse vero, ci fermiamo fino a questo istante
+    this.buttons = new Set();   // mouse buttons that we pressed ourselves
+    this.screen = null;         // rectangle (in physical pixels) of the target screen
+    this.lastPos = null;        // where we last put the cursor
+    this.suspendUntil = 0;      // if the user uses the physical mouse, we stop until this instant
     this.realMouseWins = true;
     this.onRealMouse = null;
   }
 
-  /** Rettangolo dello schermo di destinazione in pixel fisici {x,y,w,h}. */
+  /** Target screen rectangle in physical pixels {x,y,w,h}. */
   setScreenRect(r) { this.screen = r; }
 
   virtual() {
@@ -65,11 +65,11 @@ class Input {
     return { x: p.x, y: p.y };
   }
 
-  /** Lo stato REALE di un tasto in Windows (1 = sinistro, 2 = destro): per i test e le verifiche. */
+  /** The REAL state of a key in Windows (1 = left, 2 = right): for tests and checks. */
   isDown(vk) { return (GetAsyncKeyState(vk) & 0x8000) !== 0; }
   doubleClickInfo() { return { ms: GetDoubleClickTime(), px: GetSystemMetrics(36), py: GetSystemMetrics(37) }; }
 
-  /** Il mouse vero è stato mosso da una persona dopo l'ultima nostra mossa? */
+  /** Has a person moved the physical mouse since our last move? */
   _humanMovedMouse() {
     if (!this.realMouseWins || !this.lastPos) return false;
     const c = this.cursor();
@@ -88,7 +88,7 @@ class Input {
     return false;
   }
 
-  /** Muove il cursore: nx, ny in 0..1 sullo schermo di destinazione. */
+  /** Moves the cursor: nx, ny in 0..1 on the target screen. */
   moveNorm(nx, ny, now = Date.now()) {
     if (!this.screen) return false;
     if (this._blocked(now)) return false;
@@ -114,7 +114,7 @@ class Input {
       sendMouse(map[0]);
       this.buttons.add(name);
     } else {
-      // Rilasciare è SEMPRE permesso (mai lasciare un tasto incastrato).
+      // Releasing is ALWAYS allowed (never leave a button stuck).
       if (this.buttons.has(name)) { sendMouse(map[1]); this.buttons.delete(name); }
     }
     return true;
@@ -137,7 +137,7 @@ class Input {
     for (const b of [...this.buttons]) this.button(b, false);
   }
 
-  /** Tasto della tastiera (usato solo dai test per provare le scorciatoie globali). */
+  /** Keyboard key (only used by tests to try the global shortcuts). */
   key(vk, down) {
     return SendInput(1, [{ type: 1, u: { ki: { wVk: vk, wScan: 0, dwFlags: down ? 0 : KEYEVENTF_KEYUP, time: 0, dwExtraInfo: MAGIC } } }], SIZE);
   }

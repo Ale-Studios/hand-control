@@ -1,5 +1,5 @@
-// Lancia il test end-to-end in un profilo ISOLATO: USERPROFILE, APPDATA e LOCALAPPDATA
-// puntano a una cartella temporanea, così non si tocca nulla di personale.
+// Launches the end-to-end test in an ISOLATED profile: USERPROFILE, APPDATA and LOCALAPPDATA
+// point to a temporary folder, so nothing personal is touched.
 //   npm run test:e2e
 const { spawn } = require('child_process');
 const fs = require('fs');
@@ -25,8 +25,8 @@ const env = {
 delete env.ELECTRON_RUN_AS_NODE;
 
 const electron = require(path.join(root, 'node_modules', 'electron'));
-console.log('Profilo isolato:', sandbox);
-console.log('ATTENZIONE: per ~1 minuto una finestra a tutto schermo userà il mouse da sola. Non toccare mouse e tastiera.');
+console.log('Isolated profile:', sandbox);
+console.log('WARNING: for ~3 minutes a full-screen window will use the mouse by itself. Do not touch the mouse or keyboard.');
 const child = spawn(electron, [path.join(__dirname, 'run.cjs'), ...process.argv.slice(2)], { env, stdio: 'inherit', cwd: root });
 child.on('exit', (code) => {
   try { fs.rmSync(sandbox, { recursive: true, force: true }); } catch { /* ok */ }

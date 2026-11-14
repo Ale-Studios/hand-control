@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="it">
+<html lang="en">
 <head>
 <meta charset="utf-8" />
 <meta http-equiv="Content-Security-Policy"
@@ -10,12 +10,12 @@
 </head>
 <body>
 <header>
-  <div class="brand"><span class="logo"></span><b>Hand Control</b><small id="ver"></small></div>
-  <div id="statusChip" class="chip paused"><span class="dot"></span><span id="statusText">IN PAUSA</span></div>
+  <div class="brand"><span class="logo"></span><b>HAND CONTROL</b><small id="ver"></small></div>
+  <div id="statusChip" class="chip paused"><span class="dot"></span><span id="statusText">PAUSED</span></div>
   <div class="spacer"></div>
-  <button id="btnToggle" class="btn primary" title="Attiva o metti in pausa il controllo (anche Ctrl+Alt+P)">▶ Attiva</button>
-  <button id="btnKill" class="btn danger" title="Blocca TUTTO subito. Funziona anche con l'app in secondo piano.">⛔ BLOCCO DI EMERGENZA</button>
-  <button id="btnHide" class="btn" title="Nasconde la finestra: il controllo continua. Torna dall'icona vicino all'orologio.">Riduci nella barra</button>
+  <button id="btnToggle" class="btn primary" title="Activate or pause control (also Ctrl+Alt+P)">▶ Activate</button>
+  <button id="btnKill" class="btn danger" title="Stops EVERYTHING right now. Works even when the app is in the background.">⛔ EMERGENCY LOCK</button>
+  <button id="btnHide" class="btn" title="Hides the window; control keeps running. Bring it back from the tray icon next to the clock.">Hide to tray</button>
 </header>
 
 <main>
@@ -23,91 +23,91 @@
     <div class="viewport" id="viewport">
       <video id="video" muted playsinline></video>
       <canvas id="overlay"></canvas>
-      <div id="camOff" class="camOff">Fotocamera spenta</div>
+      <div id="camOff" class="camOff">Camera off</div>
       <div id="banner" class="banner"></div>
       <div id="holdWrap" class="holdWrap"><div id="holdBar"></div><span id="holdText"></span></div>
       <div id="calibBox" class="calibBox" hidden>
         <div id="calibTitle"></div><div id="calibSub"></div><div class="calibBar"><div id="calibFill"></div></div>
-        <button id="calibCancel" class="btn small">Annulla</button>
+        <button id="calibCancel" class="btn small">Cancel</button>
       </div>
     </div>
     <div class="strip">
-      <div><span>Gesto</span><b id="sPose">—</b></div>
-      <div><span>Immagini/s</span><b id="sFps">—</b></div>
-      <div><span>Riconoscimento</span><b id="sInfer">—</b></div>
-      <div><span>Ritardo mano→cursore</span><b id="sLat">—</b></div>
-      <div><span>Mano vista</span><b id="sDet">—</b></div>
+      <div><span>Gesture</span><b id="sPose">—</b></div>
+      <div><span>Frames / s</span><b id="sFps">—</b></div>
+      <div><span>Recognition</span><b id="sInfer">—</b></div>
+      <div><span>Hand → cursor delay</span><b id="sLat">—</b></div>
+      <div><span>Hand seen</span><b id="sDet">—</b></div>
     </div>
-    <div id="privacy" class="privacy">🔒 Tutto resta sul tuo PC: le immagini non vengono salvate né inviate. Richieste di rete bloccate: <b id="blocked">0</b></div>
+    <div id="privacy" class="privacy">🔒 Everything stays on this PC: images are never saved or sent. Network requests blocked: <b id="blocked">0</b></div>
   </section>
 
   <aside>
     <nav id="tabs">
-      <button data-tab="comandi" class="on">Comandi</button>
-      <button data-tab="impostazioni">Impostazioni</button>
-      <button data-tab="gesti">Gesti</button>
-      <button data-tab="misure">Misure</button>
+      <button data-tab="commands" class="on">Controls</button>
+      <button data-tab="settings">Settings</button>
+      <button data-tab="gestures">Gestures</button>
+      <button data-tab="measure">Measure</button>
     </nav>
 
-    <div class="tab" id="tab-comandi">
+    <div class="tab" id="tab-commands">
       <div class="card">
-        <h3>Come si parte</h3>
+        <h3>Getting started</h3>
         <ol class="steps">
-          <li>Stai a 1–3 metri dalla fotocamera, con la mano ben visibile.</li>
-          <li><b>Calibra</b> l'area di movimento (qui sotto).</li>
-          <li>Tieni la <b>mano aperta ferma</b> per ~2 secondi: il bollino diventa verde.</li>
-          <li>Punta con l'<b>indice</b> per muovere il cursore.</li>
+          <li>Stand 1–3 m from the camera with your hand clearly visible.</li>
+          <li><b>Calibrate</b> the movement area (below).</li>
+          <li>Hold an <b>open hand still</b> for ~2 seconds: the status turns green.</li>
+          <li>Point with your <b>index finger</b> to move the cursor.</li>
         </ol>
-        <div class="row"><button id="btnCalib" class="btn primary">🎯 Calibra l'area di movimento</button></div>
-        <div class="row"><button id="btnCam" class="btn">Spegni la fotocamera</button></div>
+        <div class="row"><button id="btnCalib" class="btn primary">🎯 Calibrate the movement area</button></div>
+        <div class="row"><button id="btnCam" class="btn">Turn camera off</button></div>
       </div>
       <div class="card">
-        <h3>Sicurezza</h3>
-        <div class="kv"><span>Blocco di emergenza</span><b id="hkKill">—</b></div>
-        <div class="kv"><span>Pausa / attiva</span><b id="hkPause">—</b></div>
-        <div class="kv"><span>Gesto di emergenza</span><b>pugno chiuso fermo ~1 s</b></div>
-        <p class="hint">Da <b>BLOCCATO</b> si esce solo dalla tastiera o dal pulsante, mai con un gesto.</p>
-        <div id="mouseNote" class="note" hidden>Mouse vero in uso: la mano si è fermata per un attimo.</div>
+        <h3>Safety</h3>
+        <div class="kv"><span>Emergency lock</span><b id="hkKill">—</b></div>
+        <div class="kv"><span>Pause / activate</span><b id="hkPause">—</b></div>
+        <div class="kv"><span>Emergency gesture</span><b>fist held still ~1 s</b></div>
+        <p class="hint">Once <b>LOCKED</b>, only the keyboard or the button can unlock — never a gesture.</p>
+        <div id="mouseNote" class="note" hidden>Physical mouse in use: hand control paused for a moment.</div>
       </div>
       <div class="card">
-        <h3>Registro</h3>
+        <h3>Log</h3>
         <div id="log" class="log"></div>
       </div>
     </div>
 
-    <div class="tab" id="tab-impostazioni" hidden>
+    <div class="tab" id="tab-settings" hidden>
       <div id="settingsForm"></div>
-      <div class="row"><button id="btnReset" class="btn small">Ripristina le impostazioni predefinite</button></div>
+      <div class="row"><button id="btnReset" class="btn small">Restore default settings</button></div>
     </div>
 
-    <div class="tab" id="tab-gesti" hidden>
+    <div class="tab" id="tab-gestures" hidden>
       <div class="card gestures">
-        <h3>I gesti</h3>
+        <h3>Gestures</h3>
         <table>
-          <tr><td>☝️ <b>Indice teso</b></td><td>Muove il cursore</td></tr>
-          <tr><td>🤏 <b>Pizzico pollice + indice</b></td><td>Click sinistro. Tenuto e mosso = trascinamento; due pizzichi = doppio click</td></tr>
-          <tr><td>🤏 <b>Pizzico pollice + medio</b></td><td>Click destro</td></tr>
-          <tr><td>✌️ <b>Indice + medio tesi</b></td><td>Scorrimento: muovi la mano su/giù</td></tr>
-          <tr><td>🖐️ <b>Mano aperta ferma</b></td><td>Attiva / mette in pausa (la barra si riempie)</td></tr>
-          <tr><td>✊ <b>Pugno chiuso fermo</b></td><td>BLOCCO di emergenza</td></tr>
-          <tr><td>⌨️ <b>Ctrl+Alt+K</b></td><td>BLOCCO di emergenza da tastiera (di nuovo = sblocca in pausa)</td></tr>
+          <tr><td>☝️ <b>Index finger up</b></td><td>Moves the cursor</td></tr>
+          <tr><td>🤏 <b>Pinch thumb + index</b></td><td>Left click. Held and moved = drag; two pinches = double click</td></tr>
+          <tr><td>🤏 <b>Pinch thumb + middle</b></td><td>Right click</td></tr>
+          <tr><td>✌️ <b>Index + middle up</b></td><td>Scroll: move your hand up/down</td></tr>
+          <tr><td>🖐️ <b>Open hand, held still</b></td><td>Activate / pause (the bar fills up)</td></tr>
+          <tr><td>✊ <b>Fist, held still</b></td><td>EMERGENCY LOCK</td></tr>
+          <tr><td>⌨️ <b>Ctrl+Alt+K</b></td><td>EMERGENCY LOCK from the keyboard (again = unlock, into pause)</td></tr>
         </table>
-        <p class="hint">Consiglio: tieni gomito appoggiato e muovi avambraccio e polso. Per il click, <b>non</b> fermarti: stringi e rilascia con decisione.</p>
+        <p class="hint">Tip: rest your elbow and move your forearm and wrist. To click, don't hesitate: pinch and release decisively.</p>
       </div>
     </div>
 
-    <div class="tab" id="tab-misure" hidden>
+    <div class="tab" id="tab-measure" hidden>
       <div class="card">
-        <h3>In diretta</h3>
+        <h3>Live</h3>
         <div id="live" class="live"></div>
-        <p class="hint">«Ritardo mano→cursore» = dalla foto scattata dalla fotocamera al cursore spostato (non include lo schermo).</p>
+        <p class="hint">"Hand → cursor delay" = from the photo taken by the camera to the moved cursor (display lag not included).</p>
       </div>
       <div class="card">
-        <h3>Prove</h3>
-        <div class="row"><button id="btnRec" class="btn">⏺ Registra 20 secondi</button><span class="hint" id="recStatus"></span></div>
-        <div class="row"><button id="btnJitter" class="btn">〰 Test tremolio (5 s, mano ferma)</button></div>
-        <div class="row"><button id="btnPrec" class="btn">🎯 Prova di precisione (9 bersagli)</button></div>
-        <div class="row"><button id="btnOpenMeasures" class="btn small">Apri la cartella delle misure</button></div>
+        <h3>Tests</h3>
+        <div class="row"><button id="btnRec" class="btn">⏺ Record 20 seconds</button><span class="hint" id="recStatus"></span></div>
+        <div class="row"><button id="btnJitter" class="btn">〰 Jitter test (5 s, hand still)</button></div>
+        <div class="row"><button id="btnPrec" class="btn">🎯 Precision test (9 targets)</button></div>
+        <div class="row"><button id="btnOpenMeasures" class="btn small">Open the measurements folder</button></div>
         <pre id="measureOut" class="out"></pre>
       </div>
     </div>
@@ -117,7 +117,7 @@
 <div id="precision" class="precision" hidden>
   <div id="precText" class="precText"></div>
   <div id="target" class="target"></div>
-  <button id="precStop" class="btn small precStop">Interrompi</button>
+  <button id="precStop" class="btn small precStop">Stop</button>
 </div>
 
 <script type="module" src="app.mjs"></script>

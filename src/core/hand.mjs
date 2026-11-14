@@ -1,7 +1,7 @@
-// Misure sulla mano. Usiamo i punti "world" di MediaPipe (in metri, indipendenti
-// dalla distanza dalla telecamera): così lo stesso gesto vale a 50 cm e a 3 m.
+// Hand measurements. We use MediaPipe's "world" points (in metres, independent of the
+// distance from the camera): so the same gesture works at 50 cm and at 3 m.
 
-// Indici dei 21 punti MediaPipe
+// Indices of the 21 MediaPipe points
 export const L = {
   WRIST: 0,
   THUMB_TIP: 4,
@@ -15,12 +15,12 @@ export function dist(a, b) {
   return Math.hypot(a.x - b.x, a.y - b.y, (a.z || 0) - (b.z || 0));
 }
 
-/** Grandezza della mano: polso → nocca del medio (circa 8-9 cm in una mano adulta). */
+/** Hand size: wrist → middle knuckle (about 8-9 cm on an adult hand). */
 export function handSize(w) {
   return dist(w[L.WRIST], w[L.MIDDLE_MCP]) || 1e-6;
 }
 
-/** Quanto è "aperto" un dito: distanza punta-polso / distanza nocca-polso. ~2.0 teso, ~0.8 chiuso a pugno. */
+/** How "open" a finger is: tip-to-wrist distance / knuckle-to-wrist distance. ~2.0 extended, ~0.8 curled into a fist. */
 export function fingerRatio(w, tip, mcp) {
   return dist(w[tip], w[L.WRIST]) / (dist(w[mcp], w[L.WRIST]) || 1e-6);
 }
@@ -32,7 +32,7 @@ export const FINGERS = {
   pinky: [L.PINKY_TIP, L.PINKY_MCP],
 };
 
-/** Misure grezze di un fotogramma (nessuna memoria: l'isteresi sta nell'engine). */
+/** Raw measurements of one frame (no memory: the hysteresis lives in the engine). */
 export function measure(w) {
   const hs = handSize(w);
   return {
@@ -49,8 +49,8 @@ export function measure(w) {
 }
 
 /**
- * Se MediaPipe non dà i punti "world", li ricaviamo dall'immagine correggendo le proporzioni.
- * Meno precisi, ma i gesti funzionano comunque.
+ * If MediaPipe does not give the "world" points, we derive them from the image by correcting
+ * the aspect ratio. Less precise, but the gestures still work.
  */
 export function worldFromImage(lm, aspect = 16 / 9) {
   return lm.map((p) => ({ x: p.x * aspect, y: p.y, z: (p.z || 0) * aspect }));

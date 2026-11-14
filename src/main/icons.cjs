@@ -1,5 +1,5 @@
-// Disegna le icone al volo (nessun file immagine da portarsi dietro): un cerchio
-// del colore dello stato con un mirino bianco. Scrive PNG "a mano" con zlib.
+// Draws the icons on the fly (no image files to carry around): a disc in the status colour
+// with a white crosshair. Writes PNGs "by hand" with zlib.
 const zlib = require('zlib');
 
 function crc32(buf) {
@@ -31,7 +31,7 @@ function encodePNG(w, h, rgba) {
   ]);
 }
 
-/** Cerchio colorato + mirino bianco, con bordo morbido (anti-aliasing a 4x). */
+/** Coloured disc + white crosshair, with a soft edge (4x anti-aliasing). */
 function drawIcon(size, [r, g, b]) {
   const buf = Buffer.alloc(size * size * 4);
   const cx = size / 2, cy = size / 2, R = size * 0.46;
@@ -63,16 +63,16 @@ function drawIcon(size, [r, g, b]) {
 }
 
 const COLORS = {
-  active: [34, 197, 94],   // verde
-  paused: [234, 179, 8],   // giallo
-  locked: [239, 68, 68],   // rosso
-  off: [100, 116, 139],    // grigio
-  brand: [37, 99, 235],    // blu (icona dell'app)
+  active: [61, 220, 151],  // green
+  paused: [242, 184, 75],  // amber
+  locked: [239, 83, 80],   // red
+  off: [107, 115, 128],    // grey
+  brand: [62, 68, 77],     // anthracite (app icon)
 };
 
 function pngFor(state, size = 32) { return encodePNG(size, size, drawIcon(size, COLORS[state] || COLORS.off)); }
 
-/** ICO con dentro un PNG (formato valido da Windows Vista in poi). */
+/** ICO containing a PNG (a valid format since Windows Vista). */
 function icoFrom(pngs) {
   const head = Buffer.alloc(6); head.writeUInt16LE(1, 2); head.writeUInt16LE(pngs.length, 4);
   let off = 6 + 16 * pngs.length;

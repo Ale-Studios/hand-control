@@ -1,7 +1,6 @@
-// Hand Control — processo principale.
-// Qui sta l'AUTORITÀ sulla sicurezza: la modalità (ATTIVO / PAUSA / BLOCCATO) vive
-// qui, e nessun comando del mouse passa se non siamo ATTIVI, qualunque cosa dica
-// la finestra con la fotocamera.
+// Hand Control — main process.
+// This is the SECURITY AUTHORITY: the mode (ACTIVE / PAUSED / LOCKED) lives here, and no
+// mouse command gets through unless we are ACTIVE, whatever the camera window says.
 
 const { app, BrowserWindow, ipcMain, globalShortcut, Tray, Menu, nativeImage, screen, session, shell, protocol } = require('electron');
 const path = require('path');
@@ -17,23 +16,23 @@ const flag = (n) => argv.includes(n);
 const E2E = process.env.HC_E2E === '1';
 const BENCH = flag('--bench');
 const flagVal = (n) => { const a = argv.find((x) => x.startsWith(n + '=')); return a ? a.split('=')[1] : ''; };
-const DELEGATE = flagVal('--delegate').toUpperCase(); // prova: --delegate=CPU | GPU
+const DELEGATE = flagVal('--delegate').toUpperCase(); // for testing: --delegate=CPU | GPU
 
 if (process.env.HC_USER_DATA) app.setPath('userData', process.env.HC_USER_DATA);
 
-// La finestra può restare nascosta nella barra e DEVE continuare a seguire la mano:
-// Chromium di solito "addormenta" le finestre nascoste; qui lo impediamo.
+// The window may stay hidden in the tray and MUST keep following the hand:
+// Chromium normally puts hidden windows to sleep; here we prevent that.
 app.commandLine.appendSwitch('disable-renderer-backgrounding');
 app.commandLine.appendSwitch('disable-background-timer-throttling');
 app.commandLine.appendSwitch('disable-backgrounding-occluded-windows');
 app.commandLine.appendSwitch('disable-features', 'CalculateNativeWinOcclusion');
 app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
-// Sui PC con due schede video (Intel + NVIDIA) Windows di solito dà a Electron quella debole.
-// Chiediamo quella potente; si può disattivare con HC_GPU=default.
+// On PCs with two graphics cards (Intel + NVIDIA) Windows usually gives Electron the weak one.
+// We ask for the powerful one; set HC_GPU=default to turn this off.
 if (process.env.HC_GPU !== 'default') app.commandLine.appendSwitch('force_high_performance_gpu');
 
-// Le pagine dell'app vengono servite da un protocollo interno "hc://": è un contesto sicuro
-// (serve alla fotocamera) e permette al motore wasm di caricarsi senza internet.
+// The app pages are served through an internal "hc://" protocol: it is a secure context
+// (the camera needs one) and lets the wasm engine load without internet.
 protocol.registerSchemesAsPrivileged([
   { scheme: 'hc', privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true, corsEnabled: true } },
 ]);
@@ -51,22 +50,22 @@ function serveLocalFiles() {
       else if (rel.startsWith('core/')) { root = coreDir; rel = rel.slice('core/'.length); }
       const file = path.resolve(root, rel || 'index.html');
       const inside = path.relative(root, file);
-      if (inside.startsWith('..') || path.isAbsolute(inside)) return new Response('vietato', { status: 403 });
+      if (inside.startsWith('..') || path.isAbsolute(inside)) return new Response('forbidden', { status: 403 });
       const data = await fs.promises.readFile(file);
       return new Response(data, { headers: { 'content-type': MIME[path.extname(file).toLowerCase()] || 'application/octet-stream', 'cache-control': 'no-store' } });
     } catch {
-      return new Response('non trovato', { status: 404 });
+      return new Response('not found', { status: 404 });
     }
   });
 }
 
-const api = new EventEmitter(); // per i test: api.on('input', ...)
+const api = new EventEmitter(); // for tests: api.on('input', ...)
 api.state = {};
 let resolveReady; api.ready = new Promise((r) => { resolveReady = r; });
 
 const nowMs = () => performance.timeOrigin + performance.now();
 
-// ─────────────────────────── impostazioni ───────────────────────────
+// ─────────────────────────── settings ───────────────────────────
 let settingsFile;
 let settings = merge(DEFAULTS, {});
 function loadSettings() {
@@ -77,10 +76,10 @@ function saveSettings() {
   try {
     fs.mkdirSync(path.dirname(settingsFile), { recursive: true });
     fs.writeFileSync(settingsFile, JSON.stringify(settings, null, 2));
-  } catch (e) { addLog('Non riesco a salvare le impostazioni: ' + e.message); }
+  } catch (e) { addLog('Could not save settings: ' + e.message); }
 }
 
-// ─────────────────────────── stato ───────────────────────────
+// ─────────────────────────── state ───────────────────────────
 const input = new Input();
 let mode = 'paused';        // paused | active | locked
 let cameraState = 'off';    // off | on | error
@@ -111,7 +110,7 @@ function overlayState() {
   return { mode, camera: cameraState, hand: handSeen, holdKind: hud.holdKind, holdProgress: hud.holdProgress, pose: hud.pose };
 }
 
-// ─────────────────────────── schermo ───────────────────────────
+// ─────────────────────────── screen ───────────────────────────
 function targetScreen() {
   const all = screen.getAllDisplays();
   const d = all[settings.control.display] || screen.getPrimaryDisplay();
@@ -126,12 +125,12 @@ function applyScreen() {
   return r;
 }
 
-// ─────────────────────────── modalità (il cuore della sicurezza) ───────────────────────────
+// ─────────────────────────── mode (the heart of safety) ───────────────────────────
 /**
  * source: 'hotkey' | 'ui' | 'gesture' | 'auto'
- * Regole:
- *  - da BLOCCATO si esce solo da tastiera o pulsante (mai con un gesto), e si arriva in PAUSA;
- *  - uscire da ATTIVO rilascia sempre i tasti del mouse.
+ * Rules:
+ *  - LOCKED can only be left from the keyboard or a button (never by a gesture), and leads to PAUSED;
+ *  - leaving ACTIVE always releases the mouse buttons.
  */
 function setMode(next, reason, source = 'ui') {
   if (!['paused', 'active', 'locked'].includes(next)) return mode;
@@ -142,42 +141,42 @@ function setMode(next, reason, source = 'ui') {
   }
   mode = next;
   if (mode !== 'active') input.releaseAll();
-  addLog(`Modalità: ${label(mode)} — ${reason || source}`);
+  addLog(`Mode: ${label(mode)} — ${reason || source}`);
   send('mode', { mode, reason, source });
   refreshTray();
   sendOverlay();
   api.emit('mode', mode, reason, source);
   return mode;
 }
-const label = (m) => ({ active: 'ATTIVO', paused: 'IN PAUSA', locked: 'BLOCCATO' }[m]);
+const label = (m) => ({ active: 'ACTIVE', paused: 'PAUSED', locked: 'LOCKED' }[m]);
 
-// ─────────────────────────── scorciatoie globali ───────────────────────────
+// ─────────────────────────── global shortcuts ───────────────────────────
 function registerHotkeys() {
   globalShortcut.unregisterAll();
   const tryReg = (accel, fn) => { try { return accel && globalShortcut.register(accel, fn); } catch { return false; } };
-  const kill = () => setMode(mode === 'locked' ? 'paused' : 'locked', mode === 'locked' ? 'sbloccato da tastiera' : 'BLOCCO DI EMERGENZA (tastiera)', 'hotkey');
+  const kill = () => setMode(mode === 'locked' ? 'paused' : 'locked', mode === 'locked' ? 'unlocked from keyboard' : 'EMERGENCY LOCK (keyboard)', 'hotkey');
   killKeyUsed = settings.safety.killKey;
   killKeyOk = tryReg(killKeyUsed, kill);
   if (!killKeyOk) {
-    // Un'altra app ha già preso la scorciatoia: ne proviamo una vicina, per non restare senza.
+    // Another app already owns the shortcut: try a nearby one so we are never left without.
     const alt = killKeyUsed.replace('Alt+', 'Alt+Shift+');
-    if (tryReg(alt, kill)) { killKeyUsed = alt; killKeyOk = true; addLog(`La scorciatoia ${settings.safety.killKey} era già usata: uso ${alt}`); }
+    if (tryReg(alt, kill)) { killKeyUsed = alt; killKeyOk = true; addLog(`Shortcut ${settings.safety.killKey} was already taken: using ${alt}`); }
   }
   pauseKeyOk = tryReg(settings.safety.pauseKey, () => {
     if (mode === 'locked') return;
-    setMode(mode === 'active' ? 'paused' : 'active', mode === 'active' ? 'pausa da tastiera' : 'attivato da tastiera', 'hotkey');
+    setMode(mode === 'active' ? 'paused' : 'active', mode === 'active' ? 'paused from keyboard' : 'activated from keyboard', 'hotkey');
   });
-  if (!killKeyOk) addLog('ATTENZIONE: non sono riuscito a registrare la scorciatoia di emergenza. Usa il pulsante rosso o il gesto del pugno.');
+  if (!killKeyOk) addLog('WARNING: could not register the emergency shortcut. Use the red button or the fist gesture.');
   send('hotkeys', hotkeyInfo());
 }
 const hotkeyInfo = () => ({ kill: killKeyUsed, killOk: killKeyOk, pause: settings.safety.pauseKey, pauseOk: pauseKeyOk });
 
-// ─────────────────────────── finestre ───────────────────────────
+// ─────────────────────────── windows ───────────────────────────
 function createWindow() {
   win = new BrowserWindow({
     width: 1180, height: 780, minWidth: 940, minHeight: 640,
     title: 'Hand Control',
-    backgroundColor: '#0f1420',
+    backgroundColor: '#1a1d21',
     icon: path.join(__dirname, '..', '..', 'assets', 'icon.png'),
     show: !(flag('--hidden') || E2E),
     webPreferences: {
@@ -195,11 +194,11 @@ function createWindow() {
   win.on('closed', () => { win = null; });
   if (flag('--dev')) win.webContents.openDevTools({ mode: 'detach' });
   if (E2E || BENCH || flag('--verbose')) {
-    // i messaggi della pagina compaiono nel terminale (utile per capire cosa non va)
+    // page messages show up in the terminal (handy to find out what is wrong)
     win.webContents.on('console-message', (_e, level, message, line, src) => {
-      if (level >= 2 || /errore|error|fail/i.test(message)) console.log(`[pagina${level >= 2 ? ' ERR' : ''}] ${message} (${String(src).split('/').pop()}:${line})`);
+      if (level >= 2 || /error|fail/i.test(message)) console.log(`[page${level >= 2 ? ' ERR' : ''}] ${message} (${String(src).split('/').pop()}:${line})`);
     });
-    win.webContents.on('render-process-gone', (_e, d) => console.log('[pagina] processo terminato:', d.reason));
+    win.webContents.on('render-process-gone', (_e, d) => console.log('[page] process gone:', d.reason));
   }
 }
 
@@ -212,7 +211,7 @@ function createOverlay() {
     skipTaskbar: true, hasShadow: false, fullscreenable: false, show: false,
     webPreferences: { preload: path.join(__dirname, 'overlay-preload.cjs'), contextIsolation: true, nodeIntegration: false, sandbox: true, backgroundThrottling: false },
   });
-  overlay.setIgnoreMouseEvents(true, { forward: false }); // non intercetta MAI un click
+  overlay.setIgnoreMouseEvents(true, { forward: false }); // NEVER intercepts a click
   overlay.setAlwaysOnTop(true, 'screen-saver');
   overlay.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
   overlay.loadURL('hc://app/overlay.html');
@@ -230,23 +229,23 @@ function refreshTray() {
   if (!tray) return;
   const img = nativeImage.createFromBuffer(pngFor(mode, 32));
   tray.setImage(img);
-  tray.setToolTip(`Hand Control — ${label(mode)}${cameraState === 'on' ? ' — fotocamera accesa' : ''}`);
+  tray.setToolTip(`Hand Control — ${label(mode)}${cameraState === 'on' ? ' — camera on' : ''}`);
   tray.setContextMenu(Menu.buildFromTemplate([
-    { label: `Stato: ${label(mode)}`, enabled: false },
-    { label: 'Mostra la finestra', click: () => showWindow() },
+    { label: `Status: ${label(mode)}`, enabled: false },
+    { label: 'Show window', click: () => showWindow() },
     { type: 'separator' },
-    { label: mode === 'active' ? 'Metti in pausa' : 'Attiva il controllo', enabled: mode !== 'locked', click: () => setMode(mode === 'active' ? 'paused' : 'active', 'dal menu', 'ui') },
-    { label: mode === 'locked' ? 'Sblocca (resta in pausa)' : '⛔ BLOCCO DI EMERGENZA', click: () => setMode(mode === 'locked' ? 'paused' : 'locked', mode === 'locked' ? 'sbloccato dal menu' : 'BLOCCO DI EMERGENZA (menu)', 'ui') },
+    { label: mode === 'active' ? 'Pause control' : 'Activate control', enabled: mode !== 'locked', click: () => setMode(mode === 'active' ? 'paused' : 'active', 'from tray menu', 'ui') },
+    { label: mode === 'locked' ? 'Unlock (stays paused)' : '⛔ EMERGENCY LOCK', click: () => setMode(mode === 'locked' ? 'paused' : 'locked', mode === 'locked' ? 'unlocked from tray menu' : 'EMERGENCY LOCK (tray menu)', 'ui') },
     { type: 'separator' },
-    { label: 'Esci', click: () => { quitting = true; app.quit(); } },
+    { label: 'Quit', click: () => { quitting = true; app.quit(); } },
   ]));
 }
 function showWindow() { if (win) { win.show(); win.focus(); } }
 
-// ─────────────────────────── sicurezza di rete e permessi ───────────────────────────
+// ─────────────────────────── network lockdown and permissions ───────────────────────────
 function lockDownSession() {
   const ses = session.defaultSession;
-  // Niente internet, mai: tutto ciò che non è un file locale viene bloccato (e contato).
+  // No internet, ever: anything that is not a local file is blocked (and counted).
   ses.webRequest.onBeforeRequest((details, cb) => {
     if (/^(hc|file|devtools|data|blob|chrome-extension):/i.test(details.url)) return cb({});
     blockedRequests++;
@@ -255,7 +254,7 @@ function lockDownSession() {
   });
   const mine = (wc) => win && !win.isDestroyed() && wc === win.webContents;
   ses.setPermissionRequestHandler((wc, permission, cb, details) => {
-    // solo la nostra finestra, solo la fotocamera (video, niente microfono)
+    // only our window, only the camera (video, never the microphone)
     const types = (details && details.mediaTypes) || [];
     cb(mine(wc) && permission === 'media' && !types.includes('audio'));
   });
@@ -297,7 +296,7 @@ function wireIpc() {
     setMode(m.mode, m.reason, m.source === 'gesture' ? 'gesture' : m.source === 'auto' ? 'auto' : 'ui');
   });
 
-  // Comandi del mouse: SEMPRE filtrati qui. Se non siamo ATTIVI, spariscono (tranne il rilascio dei tasti).
+  // Mouse commands: ALWAYS filtered here. If we are not ACTIVE they vanish (except button releases).
   ipcMain.on('input', (e, m) => {
     if (!fromMain(e) || !m) return;
     lastInputAt = Date.now();
@@ -320,7 +319,7 @@ function wireIpc() {
     if (!fromMain(e)) return;
     cameraState = ['on', 'off', 'error'].includes(s) ? s : 'off';
     if (cameraState !== 'on') handSeen = false;
-    addLog(cameraState === 'on' ? 'Fotocamera accesa' : cameraState === 'off' ? 'Fotocamera spenta' : 'Errore fotocamera');
+    addLog(cameraState === 'on' ? 'Camera on' : cameraState === 'off' ? 'Camera off' : 'Camera error');
     refreshTray(); sendOverlay();
   });
 
@@ -334,55 +333,55 @@ function wireIpc() {
   });
 
   ipcMain.on('log', (e, text) => { if (fromMain(e)) { addLog(String(text).slice(0, 200)); api.emit('log', String(text)); } });
-  ipcMain.on('window:hide', (e) => { if (fromMain(e) && win) { win.hide(); addLog('Finestra nascosta: il controllo continua nella barra delle applicazioni'); } });
+  ipcMain.on('window:hide', (e) => { if (fromMain(e) && win) { win.hide(); addLog('Window hidden: control keeps running from the system tray'); } });
   ipcMain.on('window:quit', (e) => { if (fromMain(e)) { quitting = true; app.quit(); } });
 
   ipcMain.handle('measure:save', (e, obj) => {
     if (!fromMain(e)) return null;
-    const dir = path.join(app.getPath('userData'), 'misure');
+    const dir = path.join(app.getPath('userData'), 'measurements');
     fs.mkdirSync(dir, { recursive: true });
-    const f = path.join(dir, `misura-${new Date().toISOString().replace(/[:.]/g, '-')}.json`);
-    fs.writeFileSync(f, JSON.stringify(obj, null, 2)); // solo numeri: nessuna immagine
-    if (BENCH) console.log('[misura] ' + f + '\n' + JSON.stringify(obj, null, 2));
+    const f = path.join(dir, `measurement-${new Date().toISOString().replace(/[:.]/g, '-')}.json`);
+    fs.writeFileSync(f, JSON.stringify(obj, null, 2)); // numbers only: never an image
+    if (BENCH) console.log('[measurement] ' + f + '\n' + JSON.stringify(obj, null, 2));
     return f;
   });
   ipcMain.on('measure:open-folder', (e) => {
     if (!fromMain(e)) return;
-    const dir = path.join(app.getPath('userData'), 'misure');
+    const dir = path.join(app.getPath('userData'), 'measurements');
     fs.mkdirSync(dir, { recursive: true });
     shell.openPath(dir);
   });
 }
 
-// ─────────────────────────── guardia ───────────────────────────
-// Se la finestra con la fotocamera si blocca mentre un tasto è premuto, lo rilasciamo noi.
+// ─────────────────────────── watchdog ───────────────────────────
+// If the camera window freezes while a button is held, we release it ourselves.
 function startWatchdog() {
   setInterval(() => {
-    // La fotocamera risulta accesa ma non arrivano più immagini analizzate: per prudenza, pausa.
+    // The camera is on but no analysed frames arrive any more: pause, to be safe.
     if (cameraState === 'on' && mode === 'active' && Date.now() - lastHudAt > 5000 && lastHudAt > 0) {
-      setMode('paused', 'la fotocamera non invia più immagini', 'auto');
+      setMode('paused', 'the camera stopped delivering frames', 'auto');
     }
     if (input.buttons.size && Date.now() - lastInputAt > 1500) {
       input.releaseAll();
-      addLog('Tasto del mouse rilasciato dalla guardia (nessun segnale dalla fotocamera)');
+      addLog('Mouse button released by the watchdog (no signal from the camera)');
     }
   }, 400).unref();
 }
 
-// ─────────────────────────── autotest (npm run build / installer) ───────────────────────────
-// `Hand Control.exe --selftest` controlla che tutto il necessario sia dentro l'app e si chiude.
+// ─────────────────────────── self-test (npm run build / installer) ───────────────────────────
+// `Hand Control.exe --selftest` checks that everything needed is inside the app, then exits.
 async function selfTest() {
-  const out = { koffi: false, mouse_api: false, scorciatoia: killKeyOk };
-  try { const v = input.virtual(); out.koffi = true; out.mouse_api = v.w > 0 && v.h > 0; } catch (e) { out.errore = String(e.message || e); }
-  for (const [k, u] of [['pagina', 'hc://app/index.html'], ['motore_gesti', 'hc://app/core/engine.mjs'], ['mediapipe', 'hc://app/vendor/vision_bundle.mjs'], ['wasm', 'hc://app/vendor/wasm/vision_wasm_internal.wasm'], ['modello', 'hc://app/models/hand_landmarker.task']]) {
+  const out = { koffi: false, mouse_api: false, hotkey: killKeyOk };
+  try { const v = input.virtual(); out.koffi = true; out.mouse_api = v.w > 0 && v.h > 0; } catch (e) { out.error = String(e.message || e); }
+  for (const [k, u] of [['page', 'hc://app/index.html'], ['gesture_engine', 'hc://app/core/engine.mjs'], ['mediapipe', 'hc://app/vendor/vision_bundle.mjs'], ['wasm', 'hc://app/vendor/wasm/vision_wasm_internal.wasm'], ['model', 'hc://app/models/hand_landmarker.task']]) {
     try { const r = await session.defaultSession.fetch(u); out[k] = r.ok && (await r.arrayBuffer()).byteLength > 100; } catch { out[k] = false; }
   }
-  const ok = Object.entries(out).every(([k, v]) => k === 'errore' || v === true || k === 'scorciatoia');
+  const ok = Object.entries(out).every(([k, v]) => k === 'error' || v === true || k === 'hotkey');
   console.log('[selftest] ' + JSON.stringify(out));
   app.exit(ok ? 0 : 1);
 }
 
-// ─────────────────────────── avvio ───────────────────────────
+// ─────────────────────────── startup ───────────────────────────
 const gotLock = E2E ? true : app.requestSingleInstanceLock();
 if (!gotLock) {
   app.quit();
@@ -392,7 +391,7 @@ if (!gotLock) {
     loadSettings();
     serveLocalFiles();
     input.realMouseWins = settings.safety.realMouseWins && !E2E;
-    input.onRealMouse = () => { addLog('Mouse vero in uso: la mano si ferma per un attimo'); send('real-mouse', Date.now()); };
+    input.onRealMouse = () => { addLog('Physical mouse in use: hand control pauses for a moment'); send('real-mouse', Date.now()); };
     lockDownSession();
     wireIpc();
     applyScreen();
@@ -403,11 +402,11 @@ if (!gotLock) {
     startWatchdog();
     if (BENCH) {
       setTimeout(() => app.getGPUInfo('basic')
-        .then((i) => console.log('[gpu] ' + JSON.stringify((i.gpuDevice || []).map((d) => ({ nome: d.deviceString, attiva: !!d.active })))))
+        .then((i) => console.log('[gpu] ' + JSON.stringify((i.gpuDevice || []).map((d) => ({ name: d.deviceString, active: !!d.active })))))
         .catch(() => {}), 8000);
     }
     screen.on('display-metrics-changed', () => applyScreen());
-    addLog('Hand Control avviato — IN PAUSA. Mano aperta ferma per attivare.');
+    addLog('Hand Control started — PAUSED. Hold an open hand still to activate.');
     Object.defineProperty(api, 'mode', { get: () => mode, enumerable: true });
     Object.assign(api, {
       setMode, input, settings: () => settings, setSettings: (p) => { settings = merge(settings, p); send('settings', settings); },
@@ -420,7 +419,7 @@ if (!gotLock) {
   app.on('window-all-closed', () => app.quit());
   app.on('before-quit', () => { quitting = true; });
   app.on('will-quit', () => {
-    try { input.releaseAll(); } catch { /* già libero */ }
+    try { input.releaseAll(); } catch { /* already released */ }
     globalShortcut.unregisterAll();
   });
 }

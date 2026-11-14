@@ -1,9 +1,9 @@
-// Filtro "One Euro": toglie il tremolio quando la mano è ferma, ma lascia
-// passare i movimenti veloci quasi senza ritardo. È lo standard per i cursori
-// controllati con mano/occhi (Casiez et al., 2012).
+// "One Euro" filter: removes jitter when the hand is still, but lets fast movements
+// through with almost no lag. It is the standard for hand/eye-controlled cursors
+// (Casiez et al., 2012).
 //
-//  minCutoff  → quanto "liscia" quando ti muovi piano (Hz, più basso = più fermo)
-//  beta       → quanto si "sblocca" quando ti muovi veloce (più alto = meno ritardo)
+//  minCutoff  → how much it smooths slow movements (Hz, lower = steadier)
+//  beta       → how much it "opens up" when you move fast (higher = less lag)
 
 function alphaFor(cutoffHz, dtSec) {
   const tau = 1 / (2 * Math.PI * cutoffHz);
@@ -26,13 +26,13 @@ export class OneEuro {
     if (minCutoff != null) this.minCutoff = minCutoff;
     if (beta != null) this.beta = beta;
   }
-  /** x: valore nuovo, tMs: istante in millisecondi. Ritorna il valore filtrato. */
+  /** x: new value, tMs: time in milliseconds. Returns the filtered value. */
   filter(x, tMs) {
     if (this.x === null || this.t === null) {
       this.x = x; this.dx = 0; this.t = tMs;
       return x;
     }
-    // dt minimo 1 ms (evita divisioni per zero); dt grande = nessuna memoria.
+    // minimum dt of 1 ms (avoids division by zero); a large dt = no memory.
     const dt = Math.max((tMs - this.t) / 1000, 0.001);
     const rawDx = (x - this.x) / dt;
     const aD = alphaFor(this.dCutoff, dt);
@@ -45,16 +45,16 @@ export class OneEuro {
   }
 }
 
-/** Il manopola "smorzamento" 0..1 della UI → parametri del filtro (in pixel di schermo). */
+/** The UI's 0..1 "smoothing" knob → filter parameters (in screen pixels). */
 export function smoothingToParams(smoothing) {
   const s = Math.min(1, Math.max(0, smoothing));
   return {
-    minCutoff: 4.0 * Math.pow(0.1, s), // 0 → 4 Hz (reattivo), 1 → 0.4 Hz (molto fermo)
+    minCutoff: 4.0 * Math.pow(0.1, s), // 0 → 4 Hz (responsive), 1 → 0.4 Hz (very steady)
     beta: 0.02,
   };
 }
 
-/** Mediana semplice (usata dalla calibrazione). */
+/** Plain median (used by the calibration). */
 export function median(arr) {
   if (!arr.length) return 0;
   const a = [...arr].sort((p, q) => p - q);

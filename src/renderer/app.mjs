@@ -1,4 +1,4 @@
-// Hand Control — finestra principale: collega fotocamera, gesti e interfaccia.
+// Hand Control — main window: wires the camera, the gestures and the interface together.
 import { GestureEngine } from 'hc://app/core/engine.mjs';
 import { areaFromCorners, mapToScreen } from 'hc://app/core/mapping.mjs';
 import { median } from 'hc://app/core/filters.mjs';
@@ -7,8 +7,8 @@ import { Tracker } from './tracker.mjs';
 const hc = window.hc;
 const $ = (id) => document.getElementById(id);
 
-// ───────────────────────── stato ─────────────────────────
-let S = null;            // impostazioni correnti
+// ───────────────────────── state ─────────────────────────
+let S = null;            // current settings
 let DEFAULTS = null;
 let PRESETS = {};
 let mode = 'paused';
@@ -21,13 +21,13 @@ let lastHud = null;
 let engine = null;
 let tracker = null;
 
-const POSE_IT = {
-  none: 'Nessuna mano', point: 'Puntamento', pinch: 'Click (pizzico)', rclick: 'Click destro',
-  scroll: 'Scorrimento', open: 'Mano aperta', fist: 'Pugno', other: '—',
+const POSE_EN = {
+  none: 'No hand', point: 'Pointing', pinch: 'Click (pinch)', rclick: 'Right click',
+  scroll: 'Scrolling', open: 'Open hand', fist: 'Fist', other: '—',
 };
 const HAND_CONNECTIONS = [[0,1],[1,2],[2,3],[3,4],[0,5],[5,6],[6,7],[7,8],[5,9],[9,10],[10,11],[11,12],[9,13],[13,14],[14,15],[15,16],[13,17],[17,18],[18,19],[19,20],[0,17]];
 
-// ───────────────────────── utilità ─────────────────────────
+// ───────────────────────── helpers ─────────────────────────
 const getPath = (o, p) => p.split('.').reduce((a, k) => (a == null ? a : a[k]), o);
 function patchFor(path, value) {
   const keys = path.split('.'); const root = {}; let cur = root;
@@ -48,7 +48,7 @@ const mean = (a) => (a.length ? a.reduce((x, y) => x + y, 0) / a.length : null);
 const fmt = (v, d = 1, unit = '') => (v == null || Number.isNaN(v) ? '—' : v.toFixed(d) + unit);
 const niceKey = (k) => String(k).replace('CommandOrControl', 'Ctrl').replace(/\+/g, ' + ');
 
-// ───────────────────────── registro e stato ─────────────────────────
+// ───────────────────────── log and status ─────────────────────────
 function addLogLine(line) {
   const el = $('log');
   const d = document.createElement('div');
@@ -62,30 +62,30 @@ function addLogLine(line) {
 function refreshStatus() {
   const chip = $('statusChip');
   let key = mode, text;
-  if (!cameraOn) { key = mode === 'locked' ? 'locked' : 'off'; text = mode === 'locked' ? 'BLOCCATO' : 'FOTOCAMERA SPENTA'; }
-  else if (mode === 'locked') text = 'BLOCCATO';
-  else if (mode === 'paused') text = 'IN PAUSA';
-  else if (lastHud && lastHud.handVisible) text = 'ATTIVO';
-  else { key = 'nohand'; text = 'ATTIVO — MANO NON VISTA'; }
+  if (!cameraOn) { key = mode === 'locked' ? 'locked' : 'off'; text = mode === 'locked' ? 'LOCKED' : 'CAMERA OFF'; }
+  else if (mode === 'locked') text = 'LOCKED';
+  else if (mode === 'paused') text = 'PAUSED';
+  else if (lastHud && lastHud.handVisible) text = 'ACTIVE';
+  else { key = 'nohand'; text = 'ACTIVE — NO HAND SEEN'; }
   chip.className = 'chip ' + key;
   $('statusText').textContent = text;
 
   const t = $('btnToggle');
-  t.textContent = mode === 'active' ? '⏸ Metti in pausa' : '▶ Attiva';
+  t.textContent = mode === 'active' ? '⏸ Pause' : '▶ Activate';
   t.disabled = mode === 'locked' || !cameraOn;
-  $('btnKill').textContent = mode === 'locked' ? '🔓 Sblocca (resta in pausa)' : '⛔ BLOCCO DI EMERGENZA';
-  $('btnCam').textContent = cameraOn ? 'Spegni la fotocamera' : 'Accendi la fotocamera';
+  $('btnKill').textContent = mode === 'locked' ? '🔓 Unlock (stays paused)' : '⛔ EMERGENCY LOCK';
+  $('btnCam').textContent = cameraOn ? 'Turn camera off' : 'Turn camera on';
   $('camOff').className = 'camOff' + (cameraOn ? ' hidden' : '');
-  $('camOff').textContent = cameraError || 'Fotocamera spenta';
+  $('camOff').textContent = cameraError || 'Camera off';
 
   const b = $('banner');
   const color = { paused: 'var(--yellow)', active: 'var(--green)', locked: 'var(--red)' }[mode];
   b.style.setProperty('--c', color);
   if (!cameraOn) b.textContent = '';
-  else if (mode === 'locked') b.textContent = 'BLOCCATO — i gesti sono ignorati';
-  else if (!lastHud || !lastHud.handVisible) b.textContent = mode === 'paused' ? 'IN PAUSA — mostra la mano' : 'Mano non vista';
-  else if (mode === 'paused') b.textContent = 'IN PAUSA — mano aperta ferma ~2 s per attivare';
-  else b.textContent = POSE_IT[lastHud.pose] || '';
+  else if (mode === 'locked') b.textContent = 'LOCKED — gestures are ignored';
+  else if (!lastHud || !lastHud.handVisible) b.textContent = mode === 'paused' ? 'PAUSED — show your hand' : 'Hand not seen';
+  else if (mode === 'paused') b.textContent = 'PAUSED — hold an open hand still for ~2 s to activate';
+  else b.textContent = POSE_EN[lastHud.pose] || '';
 }
 
 function refreshHold() {
@@ -97,17 +97,17 @@ function refreshHold() {
   w.style.setProperty('--c', col);
   $('holdBar').style.width = Math.round(h.holdProgress * 100) + '%';
   $('holdText').textContent = h.holdProgress >= 1
-    ? (h.holdKind === 'lock' ? 'BLOCCATO' : mode === 'active' ? 'ATTIVO' : 'IN PAUSA')
-    : h.holdKind === 'lock' ? 'Pugno… blocco di emergenza' : mode === 'active' ? 'Tieni ferma… pausa' : 'Tieni ferma… attivazione';
+    ? (h.holdKind === 'lock' ? 'LOCKED' : mode === 'active' ? 'ACTIVE' : 'PAUSED')
+    : h.holdKind === 'lock' ? 'Fist… emergency lock' : mode === 'active' ? 'Hold still… pause' : 'Hold still… activation';
 }
 
-// ───────────────────────── statistiche ─────────────────────────
+// ───────────────────────── statistics ─────────────────────────
 const stat = {
-  frameTimes: [],         // istanti dei fotogrammi (per i fps)
-  infer: [],              // ms di riconoscimento
-  det: [],                // 1/0: mano vista
-  lag: [],                // ms fotocamera→app
-  lat: [],                // ms foto→cursore spostato (totale)
+  frameTimes: [],         // frame instants (for fps)
+  infer: [],              // recognition ms
+  det: [],                // 1/0: hand seen
+  lag: [],                // ms camera→app
+  lat: [],                // ms photo→cursor moved (total)
   latParts: [],           // {cam, proc, ipc}
   acks: new Map(),
   seq: 0,
@@ -137,32 +137,32 @@ function refreshStats() {
   $('sLat').textContent = l.length ? fmt(median(l), 0, ' ms') : '—';
   const d = stat.det.slice(-90);
   $('sDet').textContent = d.length ? Math.round((100 * d.reduce((a, b) => a + b, 0)) / d.length) + '%' : '—';
-  $('sPose').textContent = lastHud ? POSE_IT[lastHud.pose] || '—' : '—';
-  if (!$('tab-misure').hidden) renderLive();
+  $('sPose').textContent = lastHud ? POSE_EN[lastHud.pose] || '—' : '—';
+  if (!$('tab-measure').hidden) renderLive();
 }
 
 function renderLive() {
   const parts = stat.latParts.slice(-100);
   const rows = [
-    ['Immagini al secondo', $('sFps').textContent],
-    ['Riconoscimento (medio)', $('sInfer').textContent],
-    ['Fotocamera → app', fmt(median(parts.map((p) => p.cam)), 0, ' ms')],
-    ['Elaborazione', fmt(median(parts.map((p) => p.proc)), 0, ' ms')],
-    ['App → mouse (IPC+SendInput)', fmt(median(parts.map((p) => p.ipc)), 1, ' ms')],
-    ['TOTALE mano → cursore', fmt(median(parts.map((p) => p.total)), 0, ' ms')],
-    ['… 95° percentile', fmt(pct(parts.map((p) => p.total), 95), 0, ' ms')],
-    ['Motore', tracker ? tracker.delegate : '—'],
+    ['Frames per second', $('sFps').textContent],
+    ['Recognition (mean)', $('sInfer').textContent],
+    ['Camera → app', fmt(median(parts.map((p) => p.cam)), 0, ' ms')],
+    ['Processing', fmt(median(parts.map((p) => p.proc)), 0, ' ms')],
+    ['App → mouse (IPC + SendInput)', fmt(median(parts.map((p) => p.ipc)), 1, ' ms')],
+    ['TOTAL hand → cursor', fmt(median(parts.map((p) => p.total)), 0, ' ms')],
+    ['… 95th percentile', fmt(pct(parts.map((p) => p.total), 95), 0, ' ms')],
+    ['Engine', tracker ? tracker.delegate : '—'],
   ];
   $('live').innerHTML = rows.map(([k, v]) => `<div><span>${k}</span><b>${v}</b></div>`).join('');
 }
 
-// ───────────────────────── eventi dei gesti → mouse ─────────────────────────
+// ───────────────────────── gesture events → mouse ─────────────────────────
 function onEngineEvent(e) {
   if (e.type === 'mode-request') {
     hc.setMode(e.mode, e.reason, 'gesture');
     return;
   }
-  // durante calibrazione e prove non muoviamo il mouse vero (tranne rilasciare)
+  // during calibration and tests we do not move the real mouse (except releasing)
   if ((cal.active || jitter.active) && e.type !== 'up') return;
   const m = { type: e.type };
   if (e.type === 'move') { m.x = e.x; m.y = e.y; }
@@ -180,7 +180,7 @@ function onEngineEvent(e) {
   if (info.bench && e.type === 'click') hc.log('click');
 }
 
-// ───────────────────────── un fotogramma ─────────────────────────
+// ───────────────────────── one frame ─────────────────────────
 let lastHudSend = 0;
 function onFrame(frame) {
   lastFrame = frame;
@@ -206,7 +206,7 @@ function onFrame(frame) {
   refreshHold();
 }
 
-// ───────────────────────── anteprima ─────────────────────────
+// ───────────────────────── preview ─────────────────────────
 const video = $('video');
 const ov = $('overlay');
 const octx = ov.getContext('2d');
@@ -218,17 +218,17 @@ function draw(frame, hud) {
   octx.clearRect(0, 0, W, H);
   const lw = Math.max(2, W / 420);
   const mirror = S.camera.mirror;
-  const toX = (u) => (mirror ? 1 - u : u) * W; // u è già "a specchio": torniamo alle coordinate immagine
+  const toX = (u) => (mirror ? 1 - u : u) * W; // u is already mirrored: go back to image coordinates
   const roi = frame.meta && frame.meta.roi;
   if (roi && (roi.w < W * 0.98 || roi.h < H * 0.98)) {
-    octx.setLineDash([lw * 3, lw * 3]); octx.strokeStyle = 'rgba(120,200,255,.55)'; octx.lineWidth = lw;
+    octx.setLineDash([lw * 3, lw * 3]); octx.strokeStyle = 'rgba(190,200,212,.55)'; octx.lineWidth = lw;
     octx.strokeRect(roi.x, roi.y, roi.w, roi.h); octx.setLineDash([]);
   }
   if (S.ui.showArea) {
     const a = S.control.area, g = Math.max(0.2, S.control.sensitivity);
     const w = a.w / g, h = a.h / g;
     const x0 = toX(a.cx - w / 2), x1 = toX(a.cx + w / 2);
-    octx.strokeStyle = mode === 'active' ? 'rgba(34,197,94,.9)' : 'rgba(234,179,8,.9)';
+    octx.strokeStyle = mode === 'active' ? 'rgba(52,211,153,.9)' : 'rgba(226,232,240,.8)';
     octx.lineWidth = lw * 1.4; octx.setLineDash([lw * 5, lw * 3]);
     octx.strokeRect(Math.min(x0, x1), (a.cy - h / 2) * H, Math.abs(x1 - x0), h * H);
     octx.setLineDash([]);
@@ -236,22 +236,22 @@ function draw(frame, hud) {
   if (S.ui.showSkeleton) {
     frame.hands.forEach((hand, i) => {
       const main = hud && hud.handVisible && i === 0;
-      octx.strokeStyle = main ? '#7fe9ff' : 'rgba(255,255,255,.35)'; octx.lineWidth = lw;
+      octx.strokeStyle = main ? '#dfe5ec' : 'rgba(255,255,255,.3)'; octx.lineWidth = lw;
       for (const [p, q] of HAND_CONNECTIONS) {
         octx.beginPath(); octx.moveTo(hand.lm[p].x * W, hand.lm[p].y * H); octx.lineTo(hand.lm[q].x * W, hand.lm[q].y * H); octx.stroke();
       }
-      octx.fillStyle = main ? '#37c6ff' : 'rgba(255,255,255,.5)';
+      octx.fillStyle = main ? '#ffffff' : 'rgba(255,255,255,.45)';
       for (const p of hand.lm) { octx.beginPath(); octx.arc(p.x * W, p.y * H, lw * 1.4, 0, Math.PI * 2); octx.fill(); }
     });
   }
   if (hud && hud.anchor) {
     const x = toX(hud.anchor.u), y = hud.anchor.v * H;
     octx.beginPath(); octx.arc(x, y, lw * 5, 0, Math.PI * 2);
-    octx.strokeStyle = hud.pressed ? '#ef4444' : mode === 'active' ? '#22c55e' : '#eab308'; octx.lineWidth = lw * 1.6; octx.stroke();
+    octx.strokeStyle = hud.pressed ? '#f87171' : mode === 'active' ? '#34d399' : '#fbbf24'; octx.lineWidth = lw * 1.6; octx.stroke();
   }
 }
 
-// ───────────────────────── fotocamera ─────────────────────────
+// ───────────────────────── camera ─────────────────────────
 async function startCamera() {
   cameraError = '';
   if (!tracker) {
@@ -259,7 +259,7 @@ async function startCamera() {
       onFrame,
       onStatus: (state, msg) => {
         if (state === 'on') { cameraOn = true; hc.cameraState('on'); }
-        else if (state === 'error') { cameraOn = false; cameraError = msg; hc.cameraState('error'); hc.setMode('paused', 'errore fotocamera', 'auto'); }
+        else if (state === 'error') { cameraOn = false; cameraError = msg; hc.cameraState('error'); hc.setMode('paused', 'camera error', 'auto'); }
         else if (state === 'off') { cameraOn = false; hc.cameraState('off'); }
         if (msg) hc.log(msg);
         refreshStatus();
@@ -271,12 +271,12 @@ async function startCamera() {
   if (ok) {
     const cams = await Tracker.listCameras();
     fillCameraSelect(cams);
-    // Rete di sicurezza: se la scheda video non produce nessun fotogramma entro 15 s, si passa al processore.
+    // Safety net: if the graphics card produces no frame within 15 s, switch to the processor.
     const framesBefore = stat.totalFrames;
     clearTimeout(startCamera._t);
     startCamera._t = setTimeout(() => {
       if (cameraOn && stat.totalFrames === framesBefore && tracker.delegate === 'GPU') {
-        hc.log('La scheda video non risponde: passo al calcolo con il processore');
+        hc.log('The graphics card is not responding: switching to the processor');
         S.camera.delegate = 'CPU';
         hc.setSettings({ camera: { delegate: 'CPU' } });
         startCamera();
@@ -289,44 +289,44 @@ async function stopCamera() {
   if (tracker) await tracker.stop();
   cameraOn = false; lastHud = null; lastFrame = null;
   hc.cameraState('off');
-  hc.setMode('paused', 'fotocamera spenta', 'ui');
+  hc.setMode('paused', 'camera turned off', 'ui');
   octx.clearRect(0, 0, ov.width, ov.height);
   refreshStatus();
 }
 
-// ───────────────────────── impostazioni (form) ─────────────────────────
+// ───────────────────────── settings form ─────────────────────────
 const SCHEMA = () => [
-  { g: 'Fotocamera' },
-  { id: 'camera.deviceId', type: 'camera', label: 'Quale fotocamera', restart: true },
-  { id: 'camera.distance', type: 'select', label: 'Distanza dalla fotocamera', restart: true,
+  { g: 'Camera' },
+  { id: 'camera.deviceId', type: 'camera', label: 'Which camera', restart: true },
+  { id: 'camera.distance', type: 'select', label: 'Distance from the camera', restart: true,
     options: Object.entries(PRESETS).map(([k, v]) => [k, v.label]),
-    help: 'Più sei lontano, più il programma ingrandisce attorno alla mano (serve una fotocamera 1080p).' },
-  { id: 'camera.delegate', type: 'select', label: 'Motore di calcolo', restart: true, options: [['auto', 'Automatico (scheda video, poi processore)'], ['GPU', 'Scheda video (GPU)'], ['CPU', 'Processore (CPU)']], help: 'Se vedi pochi fotogrammi al secondo, prova a cambiarlo.' },
-  { id: 'ui.showSkeleton', type: 'check', label: 'Mostra lo scheletro della mano' },
-  { id: 'ui.showArea', type: 'check', label: 'Mostra l\'area attiva' },
-  { g: 'Cursore' },
-  { id: 'control.sensitivity', type: 'range', min: 0.5, max: 3, step: 0.05, label: 'Sensibilità', fmt: (v) => v.toFixed(2) + '×', help: 'Più alta = bastano movimenti più piccoli.' },
-  { id: 'control.smoothing', type: 'range', min: 0, max: 1, step: 0.02, label: 'Smorzamento del tremolio', fmt: (v) => Math.round(v * 100) + '%', help: 'Più alto = cursore più fermo, ma un po\' più lento a seguirti.' },
-  { id: 'control.area.w', type: 'range', min: 0.15, max: 1, step: 0.01, label: 'Area attiva — larghezza', fmt: (v) => Math.round(v * 100) + '%' },
-  { id: 'control.area.h', type: 'range', min: 0.15, max: 1, step: 0.01, label: 'Area attiva — altezza', fmt: (v) => Math.round(v * 100) + '%' },
-  { id: 'control.area.cx', type: 'range', min: 0.1, max: 0.9, step: 0.01, label: 'Area attiva — posizione orizzontale', fmt: (v) => Math.round(v * 100) + '%' },
-  { id: 'control.area.cy', type: 'range', min: 0.1, max: 0.9, step: 0.01, label: 'Area attiva — posizione verticale', fmt: (v) => Math.round(v * 100) + '%' },
-  { id: 'control.pointAt', type: 'select', label: 'Punto che muove il cursore', options: [['knuckle', 'Nocca dell\'indice (più stabile)'], ['tip', 'Punta dell\'indice']] },
-  { id: 'control.hand', type: 'select', label: 'Mano di controllo', restart: true, options: [['any', 'Qualsiasi (la più vicina)'], ['right', 'Solo destra'], ['left', 'Solo sinistra']] },
-  ...(info.displays > 1 ? [{ id: 'control.display', type: 'select', label: 'Schermo da controllare', numeric: true, options: Array.from({ length: info.displays }, (_, i) => [i, 'Schermo ' + (i + 1)]) }] : []),
-  { g: 'Click' },
-  { id: 'clicks.pinchSensitivity', type: 'range', min: 0.6, max: 1.8, step: 0.05, label: 'Sensibilità del pizzico', fmt: (v) => v.toFixed(2) + '×', help: 'Più alta = basta un pizzico meno stretto.' },
-  { id: 'clicks.dragFreezeMs', type: 'range', min: 100, max: 700, step: 10, label: 'Cursore fermo dopo il pizzico', fmt: (v) => v + ' ms', help: 'Click più preciso; oltre questo tempo, muovendo la mano, trascini.' },
-  { id: 'clicks.confirmMs', type: 'range', min: 20, max: 160, step: 5, label: 'Durata minima di un gesto', fmt: (v) => v + ' ms', help: 'Più alto = meno click per sbaglio, ma meno pronto.' },
-  { g: 'Scorrimento' },
-  { id: 'scroll.speed', type: 'range', min: 0.3, max: 3, step: 0.1, label: 'Velocità', fmt: (v) => v.toFixed(1) + '×' },
-  { id: 'scroll.natural', type: 'check', label: 'Scorrimento "naturale" (mano su = contenuto su)' },
-  { g: 'Sicurezza' },
-  { id: 'safety.activateHoldMs', type: 'range', min: 800, max: 3500, step: 100, label: 'Tempo per ATTIVARE (mano aperta ferma)', fmt: (v) => (v / 1000).toFixed(1) + ' s', help: 'Più lungo = più difficile attivare per sbaglio.' },
-  { id: 'safety.pauseHoldMs', type: 'range', min: 500, max: 3000, step: 100, label: 'Tempo per mettere in PAUSA', fmt: (v) => (v / 1000).toFixed(1) + ' s' },
-  { id: 'safety.lockHoldMs', type: 'range', min: 500, max: 3000, step: 100, label: 'Tempo del pugno per il BLOCCO', fmt: (v) => (v / 1000).toFixed(1) + ' s' },
-  { id: 'safety.autoPauseSec', type: 'range', min: 0, max: 120, step: 5, label: 'Pausa automatica se non vedo la mano', fmt: (v) => (v === 0 ? 'mai' : v + ' s') },
-  { id: 'safety.realMouseWins', type: 'check', label: 'Se muovi il mouse vero, la mano si ferma per un attimo' },
+    help: 'The farther you are, the more the app zooms in around your hand (needs a 1080p camera).' },
+  { id: 'camera.delegate', type: 'select', label: 'Compute engine', restart: true, options: [['auto', 'Automatic (graphics card, then processor)'], ['GPU', 'Graphics card (GPU)'], ['CPU', 'Processor (CPU)']], help: 'If you see few frames per second, try changing this.' },
+  { id: 'ui.showSkeleton', type: 'check', label: 'Show the hand skeleton' },
+  { id: 'ui.showArea', type: 'check', label: 'Show the active area' },
+  { g: 'Cursor' },
+  { id: 'control.sensitivity', type: 'range', min: 0.5, max: 3, step: 0.05, label: 'Sensitivity', fmt: (v) => v.toFixed(2) + '×', help: 'Higher = smaller movements are enough.' },
+  { id: 'control.smoothing', type: 'range', min: 0, max: 1, step: 0.02, label: 'Jitter smoothing', fmt: (v) => Math.round(v * 100) + '%', help: 'Higher = steadier cursor, but a little slower to follow you.' },
+  { id: 'control.area.w', type: 'range', min: 0.15, max: 1, step: 0.01, label: 'Active area — width', fmt: (v) => Math.round(v * 100) + '%' },
+  { id: 'control.area.h', type: 'range', min: 0.15, max: 1, step: 0.01, label: 'Active area — height', fmt: (v) => Math.round(v * 100) + '%' },
+  { id: 'control.area.cx', type: 'range', min: 0.1, max: 0.9, step: 0.01, label: 'Active area — horizontal position', fmt: (v) => Math.round(v * 100) + '%' },
+  { id: 'control.area.cy', type: 'range', min: 0.1, max: 0.9, step: 0.01, label: 'Active area — vertical position', fmt: (v) => Math.round(v * 100) + '%' },
+  { id: 'control.pointAt', type: 'select', label: 'Point that moves the cursor', options: [['knuckle', 'Index knuckle (steadier)'], ['tip', 'Index fingertip']] },
+  { id: 'control.hand', type: 'select', label: 'Controlling hand', restart: true, options: [['any', 'Any (the closest one)'], ['right', 'Right only'], ['left', 'Left only']] },
+  ...(info.displays > 1 ? [{ id: 'control.display', type: 'select', label: 'Screen to control', numeric: true, options: Array.from({ length: info.displays }, (_, i) => [i, 'Screen ' + (i + 1)]) }] : []),
+  { g: 'Clicks' },
+  { id: 'clicks.pinchSensitivity', type: 'range', min: 0.6, max: 1.8, step: 0.05, label: 'Pinch sensitivity', fmt: (v) => v.toFixed(2) + '×', help: 'Higher = a looser pinch is enough.' },
+  { id: 'clicks.dragFreezeMs', type: 'range', min: 100, max: 700, step: 10, label: 'Cursor held still after a pinch', fmt: (v) => v + ' ms', help: 'More precise clicks; after this time, moving your hand drags.' },
+  { id: 'clicks.confirmMs', type: 'range', min: 20, max: 160, step: 5, label: 'Minimum gesture duration', fmt: (v) => v + ' ms', help: 'Higher = fewer accidental clicks, but less responsive.' },
+  { g: 'Scrolling' },
+  { id: 'scroll.speed', type: 'range', min: 0.3, max: 3, step: 0.1, label: 'Speed', fmt: (v) => v.toFixed(1) + '×' },
+  { id: 'scroll.natural', type: 'check', label: '"Natural" scrolling (hand up = content up)' },
+  { g: 'Safety' },
+  { id: 'safety.activateHoldMs', type: 'range', min: 800, max: 3500, step: 100, label: 'Time to ACTIVATE (open hand held still)', fmt: (v) => (v / 1000).toFixed(1) + ' s', help: 'Longer = harder to activate by accident.' },
+  { id: 'safety.pauseHoldMs', type: 'range', min: 500, max: 3000, step: 100, label: 'Time to PAUSE', fmt: (v) => (v / 1000).toFixed(1) + ' s' },
+  { id: 'safety.lockHoldMs', type: 'range', min: 500, max: 3000, step: 100, label: 'Fist time for the EMERGENCY LOCK', fmt: (v) => (v / 1000).toFixed(1) + ' s' },
+  { id: 'safety.autoPauseSec', type: 'range', min: 0, max: 120, step: 5, label: 'Auto-pause when the hand is not seen', fmt: (v) => (v === 0 ? 'never' : v + ' s') },
+  { id: 'safety.realMouseWins', type: 'check', label: 'If I move the physical mouse, hand control pauses for a moment' },
 ];
 
 let formBuilt = false;
@@ -349,7 +349,7 @@ function buildForm() {
       inp.addEventListener('change', () => changeSetting(f, inp.checked));
     } else {
       const sel = document.createElement('select');
-      if (f.type === 'camera') sel.innerHTML = '<option value="">Predefinita</option>';
+      if (f.type === 'camera') sel.innerHTML = '<option value="">Default</option>';
       else for (const [v, l] of f.options) { const o = document.createElement('option'); o.value = v; o.textContent = l; sel.appendChild(o); }
       wrap.innerHTML = `<label><span>${f.label}</span></label>`; wrap.appendChild(sel);
       if (f.help) { const h = document.createElement('div'); h.className = 'help'; h.textContent = f.help; wrap.appendChild(h); }
@@ -364,7 +364,7 @@ function buildForm() {
 let cameraSelect = null;
 function fillCameraSelect(cams) {
   if (!cameraSelect) return;
-  cameraSelect.innerHTML = '<option value="">Predefinita</option>' + cams.map((c) => `<option value="${c.id}">${c.label}</option>`).join('');
+  cameraSelect.innerHTML = '<option value="">Default</option>' + cams.map((c) => `<option value="${c.id}">${c.label}</option>`).join('');
   cameraSelect.value = S.camera.deviceId || '';
 }
 let patchTimer = null; let pendingPatch = {};
@@ -384,25 +384,21 @@ function applyMirror() { $('viewport').classList.toggle('nomirror', !S.camera.mi
 
 function syncFormFromSettings() {
   if (!formBuilt) return;
-  for (const f of SCHEMA()) {
-    if (!f.id || !f.el) continue;
-    f.el.value = getPath(S, f.id);
-  }
-  // più semplice: ricostruisce (le impostazioni cambiano di rado dall'esterno)
+  // simplest: rebuild (settings rarely change from outside)
   buildForm();
 }
 
-// ───────────────────────── calibrazione ─────────────────────────
+// ───────────────────────── calibration ─────────────────────────
 const cal = { active: false, step: 0, pts: [], samples: [] };
 const CAL_STEPS = [
-  { title: '1/2 — Angolo in ALTO a SINISTRA', sub: 'Allunga il braccio come ti viene comodo e punta con l\'indice l\'angolo in alto a sinistra dello schermo. Tieni fermo.' },
-  { title: '2/2 — Angolo in BASSO a DESTRA', sub: 'Adesso punta l\'angolo in basso a destra dello schermo. Tieni fermo.' },
+  { title: '1/2 — TOP-LEFT corner', sub: 'Reach out as is comfortable and point your index finger at the top-left corner of the screen. Hold still.' },
+  { title: '2/2 — BOTTOM-RIGHT corner', sub: 'Now point at the bottom-right corner of the screen. Hold still.' },
 ];
 function calStart() {
   if (!cameraOn) return;
   cal.active = true; cal.step = 0; cal.pts = []; cal.samples = [];
   $('calibBox').hidden = false; calShow();
-  hc.log('Calibrazione dell\'area: iniziata');
+  hc.log('Area calibration: started');
 }
 function calShow(msg) {
   const s = CAL_STEPS[cal.step];
@@ -425,25 +421,24 @@ function calFeed(hud, t) {
     if (cal.step < 2) { calShow(); return; }
     const [a, b] = cal.pts;
     if (Math.abs(a.u - b.u) < 0.06 || Math.abs(a.v - b.v) < 0.04) {
-      $('calibTitle').textContent = 'I due punti sono troppo vicini';
-      $('calibSub').textContent = 'Muovi di più il braccio tra un angolo e l\'altro. Riprova.';
-      setTimeout(calStop, 2500); hc.log('Calibrazione fallita: punti troppo vicini');
+      $('calibTitle').textContent = 'The two points are too close together';
+      $('calibSub').textContent = 'Move your arm more between one corner and the other. Try again.';
+      setTimeout(calStop, 2500); hc.log('Calibration failed: points too close');
       return;
     }
-    // La telecamera vede l'angolo "basso a destra" in un punto con u maggiore e v maggiore: se no, i punti sono invertiti.
     const area = areaFromCorners(a, b);
-    // sensibilità 1 = area esatta; la salviamo come area e riportiamo la sensibilità a 1
+    // sensitivity 1 = exact area; we save it as the area and reset sensitivity to 1
     S.control.area = area; S.control.sensitivity = 1;
     hc.setSettings({ control: { area, sensitivity: 1 } });
     syncFormFromSettings();
-    $('calibTitle').textContent = 'Fatto! Area attiva impostata';
-    $('calibSub').textContent = 'Il rettangolo tratteggiato nell\'anteprima è la tua area.';
+    $('calibTitle').textContent = 'Done! Active area set';
+    $('calibSub').textContent = 'The dashed rectangle in the preview is your area.';
     setTimeout(calStop, 2200);
-    hc.log('Calibrazione completata');
+    hc.log('Calibration completed');
   }
 }
 
-// ───────────────────────── misure ─────────────────────────
+// ───────────────────────── measurements ─────────────────────────
 const rec = { active: false, t0: 0, frames: 0, infer: [], lag: [], det: [], poses: {}, events: {}, parts: [], roiSizes: [] };
 function recStart() {
   if (!cameraOn) return;
@@ -451,10 +446,10 @@ function recStart() {
   $('btnRec').disabled = true;
   const tick = setInterval(() => {
     const left = 20 - (performance.now() - rec.t0) / 1000;
-    $('recStatus').textContent = left > 0 ? `registro… ${Math.ceil(left)} s` : '';
+    $('recStatus').textContent = left > 0 ? `recording… ${Math.ceil(left)} s` : '';
     if (left <= 0) { clearInterval(tick); recEnd(); }
   }, 250);
-  $('measureOut').textContent = 'Registrazione in corso: usa i gesti normalmente (muovi, pizzica, scorri) per 20 secondi.';
+  $('measureOut').textContent = 'Recording: use the gestures normally (move, pinch, scroll) for 20 seconds.';
 }
 function recFeed(frame, hud) {
   rec.frames++;
@@ -465,46 +460,46 @@ function recFeed(frame, hud) {
   rec.poses[hud.pose] = (rec.poses[hud.pose] || 0) + 1;
   if (mt.roi) rec.roiSizes.push(Math.round(mt.roi.w) + 'x' + Math.round(mt.roi.h));
 }
-const dist1 = (a) => ({ media: mean(a), p50: pct(a, 50), p95: pct(a, 95), max: a.length ? Math.max(...a) : null });
+const dist1 = (a) => ({ mean: mean(a), p50: pct(a, 50), p95: pct(a, 95), max: a.length ? Math.max(...a) : null });
 async function recEnd() {
   rec.active = false;
   $('btnRec').disabled = false;
   const dur = (performance.now() - rec.t0) / 1000;
   const total = rec.parts.map((p) => p.total);
   const result = {
-    tipo: 'registrazione', quando: new Date().toISOString(), durata_s: +dur.toFixed(1),
-    fotocamera: { risoluzione: `${video.videoWidth}x${video.videoHeight}`, distanza: S.camera.distance, motore: tracker && tracker.delegate },
-    fotogrammi: rec.frames, fps_medi: +(rec.frames / dur).toFixed(1),
-    mano_vista_percento: rec.det.length ? +(100 * mean(rec.det)).toFixed(1) : null,
-    riconoscimento_ms: dist1(rec.infer),
-    ritardo_fotocamera_app_ms: dist1(rec.lag),
-    ritardo_totale_mano_cursore_ms: { campioni: total.length, ...dist1(total), nota: 'dalla foto della fotocamera al cursore spostato; non include il ritardo dello schermo' },
-    parti_ms: { fotocamera_app: median(rec.parts.map((p) => p.cam)), elaborazione: median(rec.parts.map((p) => p.proc)), ipc_e_mouse: median(rec.parts.map((p) => p.ipc)) },
-    gesti_contati: rec.poses, eventi_inviati: rec.events,
-    impostazioni: { sensibilita: S.control.sensitivity, smorzamento: S.control.smoothing, area: S.control.area },
+    type: 'recording', when: new Date().toISOString(), duration_s: +dur.toFixed(1),
+    camera: { resolution: `${video.videoWidth}x${video.videoHeight}`, distance: S.camera.distance, engine: tracker && tracker.delegate },
+    frames: rec.frames, mean_fps: +(rec.frames / dur).toFixed(1),
+    hand_seen_percent: rec.det.length ? +(100 * mean(rec.det)).toFixed(1) : null,
+    recognition_ms: dist1(rec.infer),
+    camera_to_app_ms: dist1(rec.lag),
+    total_hand_to_cursor_ms: { samples: total.length, ...dist1(total), note: 'from the camera photo to the moved cursor; does not include display lag' },
+    parts_ms: { camera_to_app: median(rec.parts.map((p) => p.cam)), processing: median(rec.parts.map((p) => p.proc)), ipc_and_mouse: median(rec.parts.map((p) => p.ipc)) },
+    gestures_counted: rec.poses, events_sent: rec.events,
+    settings: { sensitivity: S.control.sensitivity, smoothing: S.control.smoothing, area: S.control.area },
   };
   if (info.bench) setTimeout(() => hc.quit(), 1500);
-  await showResult('Registrazione 20 s', result, [
-    `Immagini al secondo: ${result.fps_medi}`,
-    `Mano vista nel ${fmt(result.mano_vista_percento, 0)}% dei fotogrammi`,
-    `Riconoscimento: medio ${fmt(result.riconoscimento_ms.media, 1)} ms, 95° perc. ${fmt(result.riconoscimento_ms.p95, 1)} ms`,
-    `Ritardo totale mano→cursore: mediano ${fmt(result.ritardo_totale_mano_cursore_ms.p50, 0)} ms, 95° perc. ${fmt(result.ritardo_totale_mano_cursore_ms.p95, 0)} ms (${total.length} campioni)`,
-    `   di cui fotocamera→app ${fmt(result.parti_ms.fotocamera_app, 0)} ms, elaborazione ${fmt(result.parti_ms.elaborazione, 0)} ms, mouse ${fmt(result.parti_ms.ipc_e_mouse, 1)} ms`,
-    `Gesti: ${Object.entries(rec.poses).map(([k, v]) => `${POSE_IT[k] || k} ${v}`).join(', ')}`,
+  await showResult('20-second recording', result, [
+    `Frames per second: ${result.mean_fps}`,
+    `Hand seen in ${fmt(result.hand_seen_percent, 0)}% of frames`,
+    `Recognition: mean ${fmt(result.recognition_ms.mean, 1)} ms, 95th pct ${fmt(result.recognition_ms.p95, 1)} ms`,
+    `Total hand→cursor delay: median ${fmt(result.total_hand_to_cursor_ms.p50, 0)} ms, 95th pct ${fmt(result.total_hand_to_cursor_ms.p95, 0)} ms (${total.length} samples)`,
+    `   of which camera→app ${fmt(result.parts_ms.camera_to_app, 0)} ms, processing ${fmt(result.parts_ms.processing, 0)} ms, mouse ${fmt(result.parts_ms.ipc_and_mouse, 1)} ms`,
+    `Gestures: ${Object.entries(rec.poses).map(([k, v]) => `${POSE_EN[k] || k} ${v}`).join(', ')}`,
   ]);
 }
 async function showResult(title, obj, lines) {
   let path = '';
-  try { path = await hc.saveMeasure(obj); } catch { /* non fatale */ }
-  $('measureOut').textContent = `${title}\n${lines.join('\n')}\n\n${path ? 'Salvato in: ' + path : ''}`;
+  try { path = await hc.saveMeasure(obj); } catch { /* not fatal */ }
+  $('measureOut').textContent = `${title}\n${lines.join('\n')}\n\n${path ? 'Saved to: ' + path : ''}`;
 }
 
-// test tremolio
+// jitter test
 const jitter = { active: false, raw: [], out: [], t0: 0 };
 function jitterStart() {
   if (!cameraOn) return;
   Object.assign(jitter, { active: true, raw: [], out: [], t0: performance.now() });
-  $('measureOut').textContent = 'Tieni la mano ferma, indice teso, per 5 secondi…';
+  $('measureOut').textContent = 'Hold your hand still, index finger extended, for 5 seconds…';
   $('btnJitter').disabled = true;
 }
 function jitterFeed(hud) {
@@ -522,17 +517,17 @@ const sd2 = (pts) => {
 async function jitterEnd() {
   jitter.active = false; $('btnJitter').disabled = false;
   const r = sd2(jitter.raw), o = sd2(jitter.out);
-  const result = { tipo: 'tremolio', quando: new Date().toISOString(), campioni: jitter.raw.length, tremolio_grezzo_px: r, tremolio_dopo_smorzamento_px: o, riduzione: r && o ? r / o : null, smorzamento: S.control.smoothing, sensibilita: S.control.sensitivity };
-  await showResult('Test tremolio', result, jitter.raw.length < 20
-    ? ['Troppi pochi campioni: la mano non è stata vista abbastanza. Riprova.']
-    : [`Campioni: ${jitter.raw.length}`, `Tremolio grezzo (deviazione standard): ${fmt(r, 1)} px sullo schermo`, `Dopo lo smorzamento: ${fmt(o, 1)} px`, `Riduzione: ${fmt(result.riduzione, 1)}×`, 'Obiettivo: sotto ~3 px da fermi.']);
+  const result = { type: 'jitter', when: new Date().toISOString(), samples: jitter.raw.length, raw_jitter_px: r, smoothed_jitter_px: o, reduction: r && o ? r / o : null, smoothing: S.control.smoothing, sensitivity: S.control.sensitivity };
+  await showResult('Jitter test', result, jitter.raw.length < 20
+    ? ['Too few samples: the hand was not seen long enough. Try again.']
+    : [`Samples: ${jitter.raw.length}`, `Raw jitter (standard deviation): ${fmt(r, 1)} px on screen`, `After smoothing: ${fmt(o, 1)} px`, `Reduction: ${fmt(result.reduction, 1)}×`, 'Goal: below ~3 px when still.']);
 }
 
-// prova di precisione (bersagli da cliccare con il pizzico)
+// precision test (targets to click with a pinch)
 const prec = { active: false, i: 0, targets: [], results: [], t0: 0, misses: 0 };
 async function precStart() {
-  if (mode !== 'active') { $('measureOut').textContent = 'Prima attiva il controllo (mano aperta ferma ~2 s), poi riprova: i bersagli si cliccano con il pizzico.'; return; }
-  try { await document.documentElement.requestFullscreen(); } catch { /* si prosegue anche in finestra */ }
+  if (mode !== 'active') { $('measureOut').textContent = 'Activate control first (hold an open hand still for ~2 s), then try again: the targets are clicked with a pinch.'; return; }
+  try { await document.documentElement.requestFullscreen(); } catch { /* carry on in a window */ }
   prec.active = true; prec.i = 0; prec.results = []; prec.misses = 0;
   const xs = [0.12, 0.5, 0.88], ys = [0.18, 0.5, 0.82];
   prec.targets = []; for (const y of ys) for (const x of xs) prec.targets.push({ x, y });
@@ -545,7 +540,7 @@ function precNext() {
   const t = prec.targets[prec.i];
   const el = $('target');
   el.style.left = t.x * innerWidth + 'px'; el.style.top = t.y * innerHeight + 'px';
-  $('precText').textContent = `Bersaglio ${prec.i + 1} di ${prec.targets.length} — punta e fai il pizzico`;
+  $('precText').textContent = `Target ${prec.i + 1} of ${prec.targets.length} — point and pinch`;
   prec.t0 = performance.now(); prec.misses = 0;
 }
 document.addEventListener('mousedown', (e) => {
@@ -563,29 +558,29 @@ async function precEnd(aborted) {
   if (document.fullscreenElement) { try { await document.exitFullscreen(); } catch { /* ok */ } }
   const r = prec.results; const hits = r.filter((x) => x.hit);
   const result = {
-    tipo: 'precisione', quando: new Date().toISOString(), interrotta: aborted, bersagli: r.length,
-    centrati: hits.length, errore_px: dist1(r.map((x) => x.err)), tempo_ms: dist1(hits.map((x) => x.ms)),
-    click_a_vuoto: r.reduce((a, x) => a + x.misses, 0), raggio_bersaglio_px: 28,
-    impostazioni: { sensibilita: S.control.sensitivity, smorzamento: S.control.smoothing, area: S.control.area, congelamento_ms: S.clicks.dragFreezeMs },
+    type: 'precision', when: new Date().toISOString(), aborted, targets: r.length,
+    hit: hits.length, error_px: dist1(r.map((x) => x.err)), time_ms: dist1(hits.map((x) => x.ms)),
+    stray_clicks: r.reduce((a, x) => a + x.misses, 0), target_radius_px: 28,
+    settings: { sensitivity: S.control.sensitivity, smoothing: S.control.smoothing, area: S.control.area, freeze_ms: S.clicks.dragFreezeMs },
   };
-  await showResult('Prova di precisione', result, r.length ? [
-    `Bersagli centrati: ${hits.length} su ${r.length}`,
-    `Errore medio del click: ${fmt(result.errore_px.media, 1)} px (mediano ${fmt(result.errore_px.p50, 1)}, peggiore ${fmt(result.errore_px.max, 0)})`,
-    `Tempo per colpire: mediano ${fmt(result.tempo_ms.p50 / 1000, 1)} s, 95° perc. ${fmt(result.tempo_ms.p95 / 1000, 1)} s`,
-    `Click a vuoto: ${result.click_a_vuoto}`,
-  ] : ['Nessun bersaglio colpito.']);
+  await showResult('Precision test', result, r.length ? [
+    `Targets hit: ${hits.length} of ${r.length}`,
+    `Mean click error: ${fmt(result.error_px.mean, 1)} px (median ${fmt(result.error_px.p50, 1)}, worst ${fmt(result.error_px.max, 0)})`,
+    `Time to hit: median ${fmt(result.time_ms.p50 / 1000, 1)} s, 95th pct ${fmt(result.time_ms.p95 / 1000, 1)} s`,
+    `Stray clicks: ${result.stray_clicks}`,
+  ] : ['No targets hit.']);
 }
 
-// ───────────────────────── e2e (solo quando lo lancia il test) ─────────────────────────
+// ───────────────────────── e2e (only when the test launches the app) ─────────────────────────
 function wireE2E() {
   hc.on.e2eFrame((f) => {
-    // il test manda mani finte: stesso identico percorso dei gesti veri
+    // the test sends fake hands: exactly the same path as real gestures
     const frame = { t: f.t, hands: f.hands || [], meta: { tCapEpoch: f.tSend, tStartEpoch: f.tSend, tDoneEpoch: f.tSend, tSend: f.tSend } };
     onFrame(frame);
   });
 }
 
-// ───────────────────────── avvio ─────────────────────────
+// ───────────────────────── startup ─────────────────────────
 async function init() {
   const st = await hc.getState();
   S = st.settings; DEFAULTS = st.defaults; PRESETS = st.presets; mode = st.mode; screenSize = st.screen; info = st.info;
@@ -606,13 +601,13 @@ async function init() {
   hc.on.blocked((n) => { $('blocked').textContent = n; });
   hc.on.realMouse(() => { const n = $('mouseNote'); n.hidden = false; clearTimeout(n._t); n._t = setTimeout(() => { n.hidden = true; }, 2500); });
 
-  // pulsanti
-  $('btnToggle').onclick = () => hc.setMode(mode === 'active' ? 'paused' : 'active', mode === 'active' ? 'pausa dal pulsante' : 'attivato dal pulsante', 'ui');
-  $('btnKill').onclick = () => hc.setMode(mode === 'locked' ? 'paused' : 'locked', mode === 'locked' ? 'sbloccato dal pulsante' : 'BLOCCO DI EMERGENZA (pulsante)', 'ui');
+  // buttons
+  $('btnToggle').onclick = () => hc.setMode(mode === 'active' ? 'paused' : 'active', mode === 'active' ? 'paused from the button' : 'activated from the button', 'ui');
+  $('btnKill').onclick = () => hc.setMode(mode === 'locked' ? 'paused' : 'locked', mode === 'locked' ? 'unlocked from the button' : 'EMERGENCY LOCK (button)', 'ui');
   $('btnHide').onclick = () => hc.hide();
   $('btnCam').onclick = () => (cameraOn ? stopCamera() : startCamera());
   $('btnCalib').onclick = calStart;
-  $('calibCancel').onclick = () => { calStop(); hc.log('Calibrazione annullata'); };
+  $('calibCancel').onclick = () => { calStop(); hc.log('Calibration cancelled'); };
   $('btnRec').onclick = recStart;
   $('btnJitter').onclick = jitterStart;
   $('btnPrec').onclick = precStart;
@@ -626,9 +621,9 @@ async function init() {
   document.querySelectorAll('#tabs button').forEach((b) => b.addEventListener('click', () => {
     document.querySelectorAll('#tabs button').forEach((x) => x.classList.toggle('on', x === b));
     document.querySelectorAll('.tab').forEach((t) => { t.hidden = t.id !== 'tab-' + b.dataset.tab; });
-    if (b.dataset.tab === 'misure') renderLive();
+    if (b.dataset.tab === 'measure') renderLive();
   }));
-  // Esc chiude la prova di precisione
+  // Esc closes the precision test
   window.addEventListener('keydown', (e) => { if (e.key === 'Escape' && prec.active) precEnd(true); });
 
   setInterval(() => { refreshStats(); refreshStatus(); }, 250);
@@ -639,12 +634,12 @@ async function init() {
 }
 let benchArmed = false;
 function benchTick() {
-  // la prima elaborazione sulla GPU è lenta (compila i programmi): la registrazione parte 8 s dopo
+  // the first GPU run is slow (it compiles programs): recording starts 8 s after the first frame
   if (info.bench && !benchArmed) { benchArmed = true; setTimeout(recStart, 8000); }
 }
 function showHotkeys(h) {
-  $('hkKill').textContent = niceKey(h.kill) + (h.killOk ? ' ✔' : ' ✖ (non disponibile)');
+  $('hkKill').textContent = niceKey(h.kill) + (h.killOk ? ' ✔' : ' ✖ (unavailable)');
   $('hkPause').textContent = niceKey(h.pause) + (h.pauseOk ? ' ✔' : ' ✖');
 }
 
-init().catch((e) => { console.error(e); document.body.insertAdjacentHTML('afterbegin', '<pre style="color:#f88">Errore di avvio: ' + (e && e.message) + '</pre>'); });
+init().catch((e) => { console.error(e); document.body.insertAdjacentHTML('afterbegin', '<pre style="color:#f88">Startup error: ' + (e && e.message) + '</pre>'); });

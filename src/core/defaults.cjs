@@ -1,38 +1,38 @@
-// Impostazioni predefinite. File "CommonJS" così lo leggono sia il processo
-// principale di Electron sia i test; il renderer le riceve via IPC.
+// Default settings. A CommonJS file so both Electron's main process and the tests can read it;
+// the renderer receives them over IPC.
 
 const DEFAULTS = {
   version: 1,
   camera: {
-    deviceId: '',          // vuoto = fotocamera predefinita
-    distance: 'near',      // near | mid | far  (vedi DISTANCE_PRESETS)
-    mirror: true,          // anteprima a specchio (consigliato)
-    delegate: 'auto',      // auto = scheda video (GPU) e, se non va, processore | GPU | CPU
+    deviceId: '',          // empty = default camera
+    distance: 'near',      // near | mid | far  (see DISTANCE_PRESETS)
+    mirror: true,          // mirrored preview (recommended)
+    delegate: 'auto',      // auto = graphics card (GPU), falling back to the processor | GPU | CPU
   },
   control: {
     hand: 'any',           // any | right | left
-    pointAt: 'knuckle',    // knuckle = nocca dell'indice (stabile) | tip = punta
-    sensitivity: 1.0,      // 0.5..3: più alto = servono movimenti più piccoli
-    smoothing: 0.5,        // 0..1: più alto = cursore più fermo ma più lento
-    area: { cx: 0.5, cy: 0.5, w: 0.5, h: 0.45 }, // area attiva nella telecamera
+    pointAt: 'knuckle',    // knuckle = index knuckle (steady) | tip = fingertip
+    sensitivity: 1.0,      // 0.5..3: higher = smaller movements are enough
+    smoothing: 0.5,        // 0..1: higher = steadier cursor but slower
+    area: { cx: 0.5, cy: 0.5, w: 0.5, h: 0.45 }, // active area inside the camera frame
     snap: 0.02,
-    display: 0,            // quale schermo (0 = principale)
+    display: 0,            // which screen (0 = primary)
   },
   clicks: {
-    pinchSensitivity: 1.0, // più alto = basta un pizzico meno stretto
-    dragFreezeMs: 280,     // dopo il pizzico il cursore resta fermo per questo tempo (click preciso)
-    confirmMs: 60,         // un gesto deve durare almeno questo per contare
+    pinchSensitivity: 1.0, // higher = a looser pinch is enough
+    dragFreezeMs: 280,     // after the pinch the cursor stays still for this long (precise click)
+    confirmMs: 60,         // a gesture must last at least this long to count
   },
   scroll: {
     speed: 1.0,
-    natural: true,         // mano su = contenuto su (come sul telefono)
+    natural: true,         // hand up = content up (like a phone)
   },
   safety: {
-    activateHoldMs: 1600,  // mano aperta ferma per attivare
-    pauseHoldMs: 900,      // mano aperta ferma per mettere in pausa
-    lockHoldMs: 1000,      // pugno chiuso per il blocco di emergenza
-    autoPauseSec: 20,      // mano non vista per tanto = pausa (0 = mai)
-    realMouseWins: true,   // se muovi il mouse vero, la mano si ferma per un attimo
+    activateHoldMs: 1600,  // open hand held still to activate
+    pauseHoldMs: 900,      // open hand held still to pause
+    lockHoldMs: 1000,      // closed fist for the emergency lock
+    autoPauseSec: 20,      // hand not seen for this long = pause (0 = never)
+    realMouseWins: true,   // if you move the physical mouse, hand control stops for a moment
     killKey: 'CommandOrControl+Alt+K',
     pauseKey: 'CommandOrControl+Alt+P',
   },
@@ -43,19 +43,19 @@ const DEFAULTS = {
   },
 };
 
-// Come usare la telecamera a diverse distanze.
-//  size  → dimensione richiesta alla telecamera
-//  roi   → 'full' = guarda tutta l'immagine; 'follow' = ingrandisce attorno alla mano
-//  minSide → lato minimo (in frazione dell'altezza) del riquadro ingrandito
+// How to use the camera at different distances.
+//  width/height → size requested from the camera
+//  roi          → 'full' = look at the whole frame; 'follow' = zoom in around the hand
+//  minSide      → minimum side (as a fraction of the frame height) of the zoomed crop
 const DISTANCE_PRESETS = {
-  near: { label: 'Vicino (fino a 1,5 m)', width: 1280, height: 720, roi: 'full', minSide: 1 },
-  mid: { label: 'Medio (1,5 – 2,5 m)', width: 1920, height: 1080, roi: 'follow', minSide: 0.45 },
-  far: { label: 'Lontano (2,5 – 4 m)', width: 1920, height: 1080, roi: 'follow', minSide: 0.25 },
+  near: { label: 'Near (up to 1.5 m)', width: 1280, height: 720, roi: 'full', minSide: 1 },
+  mid: { label: 'Medium (1.5 – 2.5 m)', width: 1920, height: 1080, roi: 'follow', minSide: 0.45 },
+  far: { label: 'Far (2.5 – 4 m)', width: 1920, height: 1080, roi: 'follow', minSide: 0.25 },
 };
 
 function clone(o) { return JSON.parse(JSON.stringify(o)); }
 
-/** Unisce `patch` dentro `base` (ricorsivo, ignora chiavi sconosciute). */
+/** Merges `patch` into `base` (recursive, ignores unknown keys). */
 function merge(base, patch) {
   const out = clone(base);
   (function walk(dst, src, ref) {

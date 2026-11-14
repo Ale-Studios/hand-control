@@ -1,7 +1,7 @@
-// Misura per 20 secondi con la fotocamera vera (profilo isolato, nessuna interfaccia da usare).
+// Measures for ~20 seconds with the real camera (isolated profile, no interface to use).
 //   npm run bench:camera
-// Accende la fotocamera (si vede la lucina), registra solo NUMERI (nessuna immagine) e si chiude.
-// Durante la prova muovi la mano davanti alla fotocamera: indice, pizzico, mano aperta, ecc.
+// Turns the camera on (you will see its light), records only NUMBERS (never an image) and quits.
+// During the test move your hand in front of the camera: index finger, pinch, open hand, etc.
 const { spawn } = require('child_process');
 const fs = require('fs');
 const os = require('os');
@@ -20,10 +20,10 @@ const env = {
 delete env.ELECTRON_RUN_AS_NODE;
 const extra = process.argv.slice(2);
 const electron = require(path.join(root, 'node_modules', 'electron'));
-console.log('Misura con la fotocamera: 3 s di avvio + 20 s di registrazione. Muovi la mano davanti alla fotocamera.');
+console.log('Camera benchmark: ~10 s start-up + 20 s recording. Move your hand in front of the camera.');
 const child = spawn(electron, [root, '--bench', ...extra], { env, stdio: 'inherit', cwd: root });
 child.on('exit', (code) => {
-  const dir = path.join(sandbox, 'userdata', 'misure');
+  const dir = path.join(sandbox, 'userdata', 'measurements');
   if (process.env.HC_BENCH_KEEP && fs.existsSync(dir)) {
     const out = path.resolve(process.env.HC_BENCH_KEEP);
     fs.mkdirSync(out, { recursive: true });

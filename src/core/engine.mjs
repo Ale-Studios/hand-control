@@ -1,39 +1,38 @@
-// Il "cervello" dei gesti. Riceve i punti della mano (21 per fotogramma) e
-// decide cosa fare: muovere il cursore, premere/rilasciare il tasto, scorrere,
-// mettere in pausa, bloccare tutto.
+// The gesture "brain". It receives the hand points (21 per frame) and decides what to do:
+// move the cursor, press/release the button, scroll, pause, lock everything.
 //
-// È codice puro (nessuna fotocamera, nessun mouse): per questo si può provare
-// con mani finte nei test. Fuori escono solo "eventi" (vedi emit).
+// It is pure code (no camera, no mouse): that is why it can be tested with fake hands.
+// Only "events" come out (see emit).
 //
-// GESTI
-//   Indice teso ........................ muove il cursore
-//   Pizzico pollice+indice ............. tasto sinistro (premi = giù, apri = su;
-//                                         tenuto e mosso = trascinamento)
-//   Pizzico pollice+medio .............. click destro
-//   Indice+medio tesi (segno "V") ...... scorrimento (muovi la mano su/giù)
-//   Mano aperta ferma ................ attiva / pausa
-//   Pugno chiuso fermo ................ BLOCCO di emergenza
+// GESTURES
+//   Index finger up ................... moves the cursor
+//   Pinch thumb + index ............... left button (pinch = down, open = up;
+//                                       held and moved = drag)
+//   Pinch thumb + middle .............. right click
+//   Index + middle up ("V" sign) ...... scroll (move the hand up/down)
+//   Open hand held still .............. activate / pause
+//   Closed fist held still ............ EMERGENCY LOCK
 
 import { OneEuro, smoothingToParams } from './filters.mjs';
 import { mapToScreen } from './mapping.mjs';
 import { L, measure, worldFromImage } from './hand.mjs';
 
-const EXT_ON = 1.55;       // dito considerato "teso" sopra questo rapporto
-const EXT_OFF = 1.35;      // ...e "piegato" sotto questo (isteresi: niente tremolio di stato)
-const PINCH_ON = 0.28;     // distanza punte / grandezza mano per "pizzico"
-const PINCH_OFF = 1.5;     // per aprire il pizzico serve 1.5x la soglia
-const INDEX_BENT_MIN = 1.12; // nel pizzico l'indice è un po' piegato; nel pugno è chiuso del tutto
-const STEADY_MAX = 0.10;   // quanto la mano può muoversi (frazione immagine) durante un "tieni fermo"
+const EXT_ON = 1.55;       // a finger counts as "extended" above this ratio
+const EXT_OFF = 1.35;      // ...and as "bent" below this one (hysteresis: no state flicker)
+const PINCH_ON = 0.28;     // fingertip distance / hand size for a "pinch"
+const PINCH_OFF = 1.5;     // to open the pinch you need 1.5x the threshold
+const INDEX_BENT_MIN = 1.12; // in a pinch the index is slightly bent; in a fist it is fully closed
+const STEADY_MAX = 0.10;   // how far the hand may move (frame fraction) during a "hold still"
 const LOST_RELEASE_MS = 350;
 const HAND_FLICKER_MS = 150;
-const WHEEL_STEP = 40;     // i "scatti" della rotella sono multipli di 40 (120 = uno scatto intero)
+const WHEEL_STEP = 40;     // wheel "clicks" are multiples of 40 (120 = one full notch)
 const DOUBLE_CLICK_MS = 500;
-const DOUBLE_CLICK_SNAP = 0.03; // frazione di schermo entro cui il 2° click si "incolla" al 1°
+const DOUBLE_CLICK_SNAP = 0.03; // screen fraction within which the 2nd click "sticks" to the 1st
 
 export class GestureEngine {
   /**
-   * @param getSettings () => impostazioni correnti
-   * @param emit (evento) => void
+   * @param getSettings () => current settings
+   * @param emit (event) => void
    */
   constructor(getSettings, emit) {
     this.S = getSettings;
@@ -48,7 +47,7 @@ export class GestureEngine {
 
   setScreen(w, h) { this.screen = { w, h }; }
 
-  /** Chiamata dal processo principale quando la modalità cambia (tasto di emergenza, pulsante...). */
+  /** Called by the main process when the mode changes (emergency key, button...). */
   setMode(mode, keepHold = false) {
     if (mode === this.mode) return;
     this.mode = mode;
@@ -65,11 +64,11 @@ export class GestureEngine {
     this.poseSince = 0;
     this.st = { ext: { index: false, middle: false, ring: false, pinky: false }, pI: false, pM: false };
     this.lastSeen = -Infinity;
-    this.pressed = null;     // 'left' mentre il tasto è premuto
+    this.pressed = null;     // 'left' while the button is held
     this.pressT = 0;
     this.dragging = false;
     this.freezePos = null;
-    this.lastClick = null;   // {x,y,t} dell'ultimo click breve (per il doppio click)
+    this.lastClick = null;   // {x,y,t} of the last short click (for the double click)
     this.lastRightT = -Infinity;
     this.hist = [];
     this.ptr = { x: 0.5, y: 0.5 };
@@ -80,7 +79,7 @@ export class GestureEngine {
     this.fx.reset(); this.fy.reset(); this.fsy.reset();
   }
 
-  // ───────────────────────────── ingresso ─────────────────────────────
+  // ───────────────────────────── input ─────────────────────────────
   /** frame: { t (ms), hands: [{lm, wl, label}], meta? } */
   update(frame) {
     const S = this.S();
@@ -90,7 +89,7 @@ export class GestureEngine {
 
     if (!hand) return this._noHand(t, S);
 
-    if (t - this.lastSeen > 250) this._resetTracking(); // rientrata dopo una pausa: ricomincia pulita
+    if (t - this.lastSeen > 250) this._resetTracking(); // hand came back after a gap: start clean
     this.lastSeen = t;
 
     const wl = hand.wl || worldFromImage(hand.lm);
@@ -118,7 +117,7 @@ export class GestureEngine {
     return this.hud;
   }
 
-  // ───────────────────────────── mano persa ─────────────────────────────
+  // ───────────────────────────── hand lost ─────────────────────────────
   _noHand(t, S) {
     const lost = t - this.lastSeen;
     if (lost > LOST_RELEASE_MS && this.pressed) this._releaseAll();
@@ -129,7 +128,7 @@ export class GestureEngine {
     }
     const lim = S.safety.autoPauseSec * 1000;
     if (this.mode === 'active' && lim > 0 && Number.isFinite(this.lastSeen) && lost > lim) {
-      this._requestMode('paused', 'mano non vista da troppo tempo');
+      this._requestMode('paused', 'hand not seen for too long');
     }
     this.hud = { handVisible: lost < HAND_FLICKER_MS, pose: 'none', mode: this.mode, holdKind: null, holdProgress: 0, anchor: null, screen: { ...this.ptr }, pressed: this.pressed };
     return this.hud;
@@ -150,12 +149,12 @@ export class GestureEngine {
       pool = hands.filter((h) => h.label === S.control.hand);
       if (!pool.length) return null;
     }
-    // la mano più grande nell'immagine = la più vicina = quella che comanda
+    // the biggest hand in the image = the closest = the one in control
     const span = (h) => Math.hypot(h.lm[L.WRIST].x - h.lm[L.MIDDLE_MCP].x, h.lm[L.WRIST].y - h.lm[L.MIDDLE_MCP].y);
     return pool.reduce((a, b) => (span(b) > span(a) ? b : a));
   }
 
-  // ───────────────────────────── riconoscimento posa ─────────────────────────────
+  // ───────────────────────────── pose recognition ─────────────────────────────
   _classify(m, S) {
     const st = this.st;
     for (const f of ['index', 'middle', 'ring', 'pinky']) {
@@ -187,7 +186,7 @@ export class GestureEngine {
     }
   }
 
-  // ───────────────────────────── cursore ─────────────────────────────
+  // ───────────────────────────── cursor ─────────────────────────────
   _anchor(lm, S) {
     const a = S.control.pointAt === 'tip'
       ? lm[L.INDEX_TIP]
@@ -200,7 +199,7 @@ export class GestureEngine {
     const sc = mapToScreen(anchor.u, anchor.v, c.area, c.sensitivity, c.snap);
     const p = smoothingToParams(c.smoothing);
     this.fx.configure(p); this.fy.configure(p);
-    // il filtro lavora in pixel: lo stesso numero di "tremolio" pesa uguale su ogni schermo
+    // the filter works in pixels: the same amount of "jitter" weighs the same on every screen
     const x = this.fx.filter(sc.x * this.screen.w, t) / this.screen.w;
     const y = this.fy.filter(sc.y * this.screen.h, t) / this.screen.h;
     this.ptr = { x: Math.min(1, Math.max(0, x)), y: Math.min(1, Math.max(0, y)) };
@@ -214,24 +213,24 @@ export class GestureEngine {
     return best ? { x: best.x, y: best.y } : { ...this.ptr };
   }
 
-  // ───────────────────────────── gesti di sicurezza ─────────────────────────────
+  // ───────────────────────────── safety gestures ─────────────────────────────
   _holds(hand, t, S) {
     let kind = this.pose === 'open' ? 'toggle' : this.pose === 'fist' ? 'lock' : null;
-    if (this.mode === 'locked') kind = null; // da bloccato si sblocca solo da tastiera / pulsante
+    if (this.mode === 'locked') kind = null; // once locked, only keyboard / button unlock
     const w = hand.lm[L.WRIST];
     if (kind !== this.holdKind) {
       this.holdKind = kind; this.holdStart = t; this.holdOrigin = { x: w.x, y: w.y }; this.holdLatched = false;
     }
     if (!kind) return;
     if (Math.hypot(w.x - this.holdOrigin.x, w.y - this.holdOrigin.y) > STEADY_MAX) {
-      // la mano si muove: il "tieni fermo" riparte (così salutare non attiva niente)
+      // the hand is moving: the "hold still" restarts (so waving does not activate anything)
       this.holdStart = t; this.holdOrigin = { x: w.x, y: w.y };
     }
     if (this.holdLatched) return;
     if (t - this.holdStart >= this._holdNeed(S)) {
       this.holdLatched = true;
-      if (kind === 'lock') this._requestMode('locked', 'gesto pugno chiuso');
-      else this._requestMode(this.mode === 'active' ? 'paused' : 'active', 'gesto mano aperta');
+      if (kind === 'lock') this._requestMode('locked', 'closed-fist gesture');
+      else this._requestMode(this.mode === 'active' ? 'paused' : 'active', 'open-hand gesture');
     }
   }
 
@@ -248,13 +247,13 @@ export class GestureEngine {
 
   _requestMode(mode, reason) {
     if (mode === this.mode) return;
-    // Lo applichiamo subito qui (il processo principale resta comunque il "giudice" finale).
-    // keepHold: la mano resta aperta/chiusa dopo il gesto, e non deve ripartire da capo.
+    // Applied right away here (the main process is still the final judge).
+    // keepHold: the hand stays open/closed after the gesture and must not start over.
     this.setMode(mode, true);
     this.emit({ type: 'mode-request', mode, reason, meta: this.meta });
   }
 
-  // ───────────────────────────── azioni (solo in modalità ATTIVO) ─────────────────────────────
+  // ───────────────────────────── actions (ACTIVE mode only) ─────────────────────────────
   _onPoseChange(prev, next, t, S) {
     if (prev === 'pinch' && this.pressed) this._release(t);
     if (next === 'pinch') this._press(t, S);
@@ -269,7 +268,7 @@ export class GestureEngine {
 
   _press(t, S) {
     let f = this._histAt(this.candSince - 30);
-    // Doppio click: il secondo pizzico si "incolla" al punto del primo.
+    // Double click: the second pinch "sticks" to the point of the first.
     if (this.lastClick && t - this.lastClick.t < DOUBLE_CLICK_MS
       && Math.hypot((f.x - this.lastClick.x) * this.screen.w, (f.y - this.lastClick.y) * this.screen.h) < DOUBLE_CLICK_SNAP * this.screen.w) {
       f = { x: this.lastClick.x, y: this.lastClick.y };
@@ -319,9 +318,9 @@ export class GestureEngine {
     if (this.scrollPrev == null) { this.scrollPrev = f; return; }
     const dPx = f - this.scrollPrev;
     this.scrollPrev = f;
-    if (Math.abs(dPx) < 0.4) return; // zona morta: la mano ferma non scorre
+    if (Math.abs(dPx) < 0.4) return; // dead zone: a still hand does not scroll
     const dir = S.scroll.natural ? 1 : -1;
-    // mano su (dPx<0) + naturale = rotella verso il basso (negativa): il contenuto sale con la mano
+    // hand up (dPx<0) + natural = wheel down (negative): the content rises with the hand
     this.wheelAcc += dir * (dPx / this.screen.h) * 1200 * S.scroll.speed;
     const n = Math.trunc(this.wheelAcc / WHEEL_STEP) * WHEEL_STEP;
     if (n !== 0) {

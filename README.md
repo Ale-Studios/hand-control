@@ -1,141 +1,140 @@
 # Hand Control
 
-Controlla il PC **con le mani**, senza toccare mouse o tastiera, anche da qualche metro di distanza.
-Una fotocamera guarda la tua mano; **tutto resta sul tuo PC** (niente internet, niente cloud, niente registrazioni).
+Control your PC **with your hands**, without touching a mouse or keyboard, even from a few metres away.
+A camera watches your hand; **everything stays on your PC** (no internet, no cloud, no recordings).
 
-> Stato: **MVP (v0.1)**. Provato con "mani finte" lungo tutta la catena fino al mouse vero (27 controlli
-> automatici superati, ritardo del software ~3 ms) e con la fotocamera reale (motore locale su GPU: 25 ms a immagine).
-> La precisione con la **tua** mano reale, soprattutto a 2–3 m, va ancora misurata: vedi [docs/MISURE.md](docs/MISURE.md).
+> Status: **MVP (v0.1)**. Tested with synthetic "fake hands" along the whole chain down to the real mouse
+> (27 automatic checks passed, ~3 ms of software delay) and with a real camera (local engine on the GPU: 25 ms per frame).
+> Accuracy with a **real** hand, especially at 2–3 m, still has to be measured: see [docs/MEASUREMENTS.md](docs/MEASUREMENTS.md).
 
-## Cosa sa fare
+## What it does
 
-| Gesto | Cosa succede |
+| Gesture | What happens |
 |---|---|
-| ☝️ **Indice teso** | muove il cursore (con smorzamento del tremolio) |
-| 🤏 **Pizzico pollice + indice** | click sinistro · tenuto e mosso = trascinamento · due pizzichi = doppio click |
-| 🤏 **Pizzico pollice + medio** | click destro |
-| ✌️ **Indice + medio tesi** | scorrimento: muovi la mano su/giù |
-| 🖐️ **Mano aperta ferma** | attiva / mette in pausa (barra di avanzamento) |
-| ✊ **Pugno chiuso fermo** | **blocco di emergenza** |
-| ⌨️ **Ctrl+Alt+K** | **blocco di emergenza** da tastiera (di nuovo = sblocca, in pausa) |
+| ☝️ **Index finger up** | moves the cursor (with jitter smoothing) |
+| 🤏 **Pinch thumb + index** | left click · held and moved = drag · two pinches = double click |
+| 🤏 **Pinch thumb + middle** | right click |
+| ✌️ **Index + middle up** | scroll: move your hand up/down |
+| 🖐️ **Open hand, held still** | activate / pause (progress bar) |
+| ✊ **Closed fist, held still** | **emergency lock** |
+| ⌨️ **Ctrl+Alt+K** | **emergency lock** from the keyboard (again = unlock, into pause) |
 
-Inoltre: anteprima con scheletro della mano, indicatore di stato sempre in primo piano (ATTIVO / IN PAUSA /
-BLOCCATO / mano non vista, e pallino rosso quando la fotocamera è accesa), calibrazione guidata dell'area di
-movimento, impostazioni di sensibilità/smorzamento/area/distanza, e una scheda **Misure** (latenza, tremolio,
-precisione).
+Also: a preview with the hand skeleton, an always-on-top status badge (ACTIVE / PAUSED / LOCKED / hand not seen, plus a red dot
+while the camera is on), guided calibration of the movement area, settings for sensitivity / smoothing / area / distance,
+and a **Measure** tab (latency, jitter, precision).
 
-## Avvio rapido
+## Quick start
 
-Servono **Windows 10/11** e **Node.js 20+** (per sviluppare). Poi:
+You need **Windows 10/11** and **Node.js 20+** (for development). Then:
 
 ```bash
 npm install
 npm start
 ```
 
-1. Mettiti a 1–3 m dalla fotocamera, con la mano ben visibile.
-2. Scheda **Comandi → Calibra l'area di movimento** (due angoli, 1,5 s ciascuno).
-3. Tieni la **mano aperta ferma ~2 secondi**: il badge diventa verde (**ATTIVO**).
-4. Punta con l'indice. Per fermare tutto: **Ctrl+Alt+K**.
+1. Stand 1–3 m from the camera with your hand clearly visible.
+2. **Controls → Calibrate the movement area** (two corners, 1.5 s each).
+3. Hold an **open hand still for ~2 seconds**: the badge turns green (**ACTIVE**).
+4. Point with your index finger. To stop everything: **Ctrl+Alt+K**.
 
-Il controllo parte **sempre in pausa**: non muove nulla finché non fai tu il gesto di attivazione.
+Control **always starts paused**: nothing moves until you make the activation gesture yourself.
 
-### Installarlo come programma
+### Installing it as a program
 
 ```bash
 npm run dist
 ```
 
-crea `dist\Hand Control Setup 0.1.0.exe` (installer NSIS da ~96 MB; puoi scegliere la cartella; crea collegamenti sul
-Desktop e nel menu Start). Non è firmato digitalmente: al primo avvio Windows SmartScreen può mostrare «Windows ha
-protetto il PC» → *Ulteriori informazioni → Esegui comunque*.
-Per provare solo la build senza installer: `npm run build` (crea `dist\win-unpacked\Hand Control.exe`).
-Controllo rapido di un'app costruita o installata: `"Hand Control.exe" --selftest` (verifica che mouse, motore, modello
-e file ci siano, stampa il risultato e si chiude con codice 0 se tutto è a posto).
-La build scarica da internet **solo** gli strumenti di costruzione di Electron/NSIS (una volta); l'app finita no.
+creates `dist\Hand Control Setup 0.1.0.exe` (NSIS installer, ~96 MB; you can choose the folder; it adds Desktop and Start-menu
+shortcuts). It is not digitally signed: on first launch Windows SmartScreen may show "Windows protected your PC" →
+*More info → Run anyway*.
+To try just the build without an installer: `npm run build` (creates `dist\win-unpacked\Hand Control.exe`).
+Quick check of a built or installed app: `"Hand Control.exe" --selftest` (verifies that the mouse API, the engine, the model and
+the files are all present, prints the result and exits with code 0 if everything is fine).
+The build downloads **only** the Electron/NSIS build tools from the internet (once); the finished app never does.
 
-## Permessi e sicurezza (cosa serve e cosa NON fa)
+## Permissions and safety (what is needed and what it does NOT do)
 
-| Cosa | Serve? | Perché |
+| What | Needed? | Why |
 |---|---|---|
-| **Fotocamera** | sì | per vedere la mano. Si accende all'avvio, c'è l'indicatore rosso "CAMERA" sempre visibile e si spegne col pulsante. Windows: *Impostazioni → Privacy e sicurezza → Fotocamera* deve consentire le app desktop. |
-| **Controllo di mouse** | sì (nessun permesso speciale) | usa la funzione di sistema `SendInput`, come una tastiera/mouse virtuale. |
-| **Amministratore** | no, **solo** se vuoi controllare finestre avviate come Amministratore | Windows impedisce a un programma normale di cliccare dentro quelle finestre (UIPI). |
-| **Microfono** | **no** (richiesta negata dal codice) | |
-| **Internet** | **no**, mai | ogni richiesta non locale viene bloccata e contata (riga *«Richieste di rete bloccate»*). Il motore e il modello di riconoscimento sono dentro l'app. |
-| **Disco** | solo le impostazioni | `%APPDATA%\hand-control\settings.json`. Le misure salvano **solo numeri**. |
+| **Camera** | yes | to see your hand. It turns on at launch, a red "CAMERA" indicator is always visible, and a button turns it off. Windows: *Settings → Privacy & security → Camera* must allow desktop apps. |
+| **Mouse control** | yes (no special permission) | uses the system function `SendInput`, like a virtual keyboard/mouse. |
+| **Administrator** | no — **only** if you want to control windows started as Administrator | Windows stops a normal program from clicking inside those windows (UIPI). |
+| **Microphone** | **no** (the request is denied by the code) | |
+| **Internet** | **no**, never | every non-local request is blocked and counted (the *"Network requests blocked"* line). The recognition engine and model are inside the app. |
+| **Disk** | settings only | `settings.json` in the app's data folder under `%APPDATA%`. Measurements save **numbers only**. |
 
-* **Nessuna registrazione:** i fotogrammi vengono analizzati e subito scartati; non si scrive nessuna immagine o video.
-* **Controllo accidentale difficile:** parte in pausa; per attivare serve un gesto deliberato (mano aperta **ferma**
-  ~1,6 s; se la muovi riparte da capo); i gesti di pausa/blocco funzionano da fermi.
-* **Interruttore di emergenza che funziona sempre:** `Ctrl+Alt+K` (globale, anche con l'app in secondo piano),
-  pulsante rosso, menu dell'icona nella barra, o pugno chiuso. Rilascia subito i tasti del mouse premuti.
-  Da BLOCCATO i gesti non fanno nulla e si esce solo da tastiera/pulsante, tornando in *pausa*.
-* Se un'altra app usa già `Ctrl+Alt+K` (per esempio JARVIS), Hand Control prova `Ctrl+Alt+Shift+K` e lo scrive
-  nel registro; il pulsante rosso e il pugno restano sempre disponibili.
-* Se muovi il **mouse vero**, la mano si ferma per ~1,5 s per non litigare con te.
-* Se la fotocamera risulta accesa ma smettono di arrivare immagini analizzate (5 s) mentre sei ATTIVO, l'app va in pausa da sola.
-* Su PC con due schede video l'app chiede a Windows di usare quella **potente** (sul PC di prova, con quella scelta da
-  Windows il riconoscimento non partiva); se la scheda video non risponde passa da sola al processore
-  (*Impostazioni → Fotocamera → Motore di calcolo* per sceglierlo a mano).
+* **No recording:** frames are analysed and immediately discarded; no image or video is ever written.
+* **Accidental control is hard:** it starts paused; activation needs a deliberate gesture (open hand held **still** for
+  ~1.6 s; if you move, it starts over); the pause/lock gestures also work only when held still.
+* **An emergency switch that always works:** `Ctrl+Alt+K` (global, even with the app in the background), the red button, the
+  tray-icon menu, or a closed fist. It instantly releases any pressed mouse buttons. Once LOCKED, gestures do nothing and
+  only the keyboard/button unlock it, returning to *pause*.
+* If another app already owns `Ctrl+Alt+K` (for example JARVIS), Hand Control tries `Ctrl+Alt+Shift+K` and says so in the log;
+  the red button and the fist stay available regardless.
+* If you move the **physical mouse**, hand control pauses for ~1.5 s so it does not fight you.
+* If the camera is on but analysed frames stop arriving (5 s) while you are ACTIVE, the app pauses itself.
+* On PCs with two graphics cards the app asks Windows for the **powerful** one (on the test PC, with the one Windows picked
+  the recognition would not start); if the graphics card does not respond it falls back to the processor by itself
+  (*Settings → Camera → Compute engine* to choose manually).
 
-## A distanza (1–3 metri)
+## At a distance (1–3 metres)
 
-Nella scheda *Impostazioni → Fotocamera → Distanza* scegli **Vicino / Medio / Lontano**. Più è lontano, più
-l'app chiede alla fotocamera 1080p e ingrandisce attorno alla mano (il ritaglio la segue). Consigli:
-buona luce davanti (non controluce), sfondo non troppo caotico, manica a contrasto con la pelle,
-**fotocamera 1080p** o meglio. A 3 m con una webcam economica grandangolo la mano può restare troppo piccola:
-dipende dalla fotocamera, serve misurare (scheda *Misure*).
+In *Settings → Camera → Distance* choose **Near / Medium / Far**. The farther away, the more the app asks the camera for 1080p and
+zooms in around your hand (the crop follows it). Tips: good light in front of you (not backlit), a not-too-busy background,
+a sleeve that contrasts with your skin, a **1080p camera** or better. At 3 m with a cheap wide-angle webcam the hand may stay too
+small: it depends on the camera, so it needs measuring (*Measure* tab).
 
-## Misure (precisione e latenza)
+## Measure (precision and latency)
 
-Scheda **Misure**:
-* **In diretta:** immagini/s, tempo di riconoscimento, ritardo mano→cursore (fotocamera→app, elaborazione, mouse).
-* **Registra 20 secondi:** statistiche complete (mediane, 95° percentile, % di fotogrammi con mano vista, gesti contati), salvate come `.json` in `%APPDATA%\hand-control\misure`.
-* **Test tremolio (5 s):** quanti pixel "balla" il cursore a mano ferma, prima e dopo lo smorzamento.
-* **Prova di precisione:** 9 bersagli da colpire col pizzico a schermo intero → errore medio in pixel e tempi.
+**Measure** tab:
+* **Live:** frames/s, recognition time, hand→cursor delay (camera→app, processing, mouse).
+* **Record 20 seconds:** full statistics (medians, 95th percentile, % of frames with a hand, gestures counted), saved as `.json`
+  in the app's `measurements` folder (button *Open the measurements folder*).
+* **Jitter test (5 s):** how many pixels the cursor "dances" with a still hand, before and after smoothing.
+* **Precision test:** 9 targets to hit with a pinch in full screen → mean error in pixels and times.
 
-Da terminale, senza interfaccia: `npm run bench:camera` (accende la fotocamera per ~35 s, scrive i numeri in
-un profilo isolato, esce; `npm run bench:camera -- --delegate=CPU` prova il processore al posto della scheda video).
-Risultati e come leggerli: [docs/MISURE.md](docs/MISURE.md).
+From a terminal, without the interface: `npm run bench:camera` (turns the camera on for ~35 s, writes the numbers in an
+isolated profile, exits; `npm run bench:camera -- --delegate=CPU` tries the processor instead of the graphics card).
+Results and how to read them: [docs/MEASUREMENTS.md](docs/MEASUREMENTS.md).
 
-## Provare che funziona (test automatici)
+## Testing
 
 ```bash
-npm test          # 17 prove sul "cervello" dei gesti con mani finte (veloci, nessuna fotocamera)
-npm run test:e2e  # prova completa: app vera → mouse vero → finestra che registra gli eventi (~3 min)
-HC_E2E_ONLY=dbl,kill npm run test:e2e   # solo alcune sezioni (dbl = doppio click, kill = emergenza, net = rete)
+npm test          # 17 tests of the gesture "brain" with fake hands (fast, no camera)
+npm run test:e2e  # full test: real app → real mouse → a window that records the events (~3 min)
+HC_E2E_ONLY=dbl,kill npm run test:e2e   # only some sections (dbl = double click, kill = emergency, net = network)
 ```
 
-`test:e2e` apre una finestra a schermo intero che **usa il mouse da sola per ~1 minuto** (non toccare nulla) in
-un profilo isolato (`USERPROFILE/APPDATA/LOCALAPPDATA` temporanei); controlla movimento, click, doppio click, click
-destro, trascinamento, scorrimento, pausa, interruttore di emergenza (con un vero `Ctrl+Alt+K`), pugno, pausa
-automatica e blocco della rete, e misura la latenza.
+`test:e2e` opens a full-screen window that **uses the mouse by itself for ~3 minutes** (do not touch anything) in an isolated
+profile (temporary `USERPROFILE/APPDATA/LOCALAPPDATA`); it checks movement, click, double click, right click, drag, scrolling,
+pause, the emergency switch (with a real `Ctrl+Alt+K`), fist, auto-pause and the network block, and measures latency.
 
-## Struttura del progetto
+## Project structure
 
 ```
-src/core/       cervello dei gesti (puro, testabile): engine, filtri, mappatura, misure della mano
-src/main/       Electron: sicurezza e modalità, SendInput (koffi), scorciatoie, icona, rete bloccata
-src/renderer/   interfaccia, fotocamera + MediaPipe (tracker.mjs), overlay di stato
-assets/models/  modello di riconoscimento della mano (Google, Apache 2.0)
-test/           prove automatiche e prova end-to-end
-docs/           scelte tecniche, idee future, misure
+src/core/       gesture brain (pure, testable): engine, filters, mapping, hand measurements
+src/main/       Electron: safety and modes, SendInput (koffi), shortcuts, icons, network lockdown
+src/renderer/   interface, camera + MediaPipe (tracker.mjs), status overlay
+assets/models/  hand recognition model (Google, Apache 2.0)
+test/           automatic tests and the end-to-end test
+docs/           technical choices, future ideas, measurements
 ```
 
-Per capire **perché** è fatto così (e le alternative scartate): [docs/SCELTE-TECNICHE.md](docs/SCELTE-TECNICHE.md).
-Idee per dopo: [docs/IDEE-FUTURE.md](docs/IDEE-FUTURE.md).
+To understand **why** it is built this way (and the discarded alternatives): [docs/TECHNICAL-CHOICES.md](docs/TECHNICAL-CHOICES.md).
+Ideas for later: [docs/FUTURE-IDEAS.md](docs/FUTURE-IDEAS.md).
 
-## Limiti noti (onestà)
+## Known limits (honesty)
 
-* I gesti sono stati verificati con mani sintetiche e con la catena fino al mouse; **con una mano vera servono ancora misure** e probabilmente qualche ritocco alle soglie (impostazioni *Sensibilità del pizzico*, *Durata minima di un gesto*).
-* L'etichetta **destra/sinistra** di MediaPipe va confermata con la tua fotocamera (se "Solo destra" sceglie la mano sbagliata, usa "Solo sinistra").
-* A 3 m il risultato dipende molto dalla fotocamera e dalla luce.
-* Non può controllare finestre "Amministratore" se non avviato anch'esso come Amministratore.
-* Una sola mano controlla (la più vicina, o quella scelta).
-* Installer non firmato → avviso SmartScreen.
+* The gestures were verified with synthetic hands and with the chain down to the mouse; **with a real hand more measurements are still
+  needed** and probably some tweaking of the thresholds (settings *Pinch sensitivity*, *Minimum gesture duration*).
+* MediaPipe's **right/left** label must be confirmed with your camera (if "Right only" picks the wrong hand, use "Left only").
+* At 3 m the result depends heavily on the camera and the light.
+* It cannot control "Administrator" windows unless it is also started as Administrator.
+* Only one hand is in control (the closest one, or the chosen one).
+* Unsigned installer → SmartScreen warning.
 
-## Licenze
+## Licences
 
-Codice: Ale Studios. Dipendenze: Electron (MIT), koffi (MIT), MediaPipe Tasks Vision e modello
-`hand_landmarker.task` (Google, Apache 2.0).
+Code: Ale Studios. Dependencies: Electron (MIT), koffi (MIT), MediaPipe Tasks Vision and the `hand_landmarker.task` model
+(Google, Apache 2.0).
