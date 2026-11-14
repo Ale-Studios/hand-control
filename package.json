@@ -1,0 +1,54 @@
+{
+  "name": "hand-control",
+  "productName": "Hand Control",
+  "version": "0.1.0",
+  "description": "Controlla il PC con le mani, a distanza, tutto in locale.",
+  "main": "src/main/main.cjs",
+  "author": "Ale Studios",
+  "license": "UNLICENSED",
+  "private": true,
+  "scripts": {
+    "postinstall": "node scripts/vendor.cjs",
+    "start": "electron .",
+    "test": "node --test test/*.test.mjs",
+    "test:e2e": "node test/e2e/launch.cjs",
+    "bench:camera": "node scripts/bench.cjs",
+    "icon": "node scripts/gen-icon.cjs",
+    "build": "node scripts/build.cjs",
+    "dist": "node scripts/build.cjs --installer"
+  },
+  "devDependencies": {
+    "electron": "31.7.7",
+    "electron-builder": "^26.18.0",
+    "@mediapipe/tasks-vision": "^1.2.3"
+  },
+  "dependencies": {
+    "koffi": "^3.3.8"
+  },
+  "build": {
+    "appId": "com.alestudios.handcontrol",
+    "productName": "Hand Control",
+    "asar": false,
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "src/**/*",
+      "assets/**/*",
+      "package.json",
+      "!**/*.map"
+    ],
+    "win": {
+      "target": "nsis",
+      "signAndEditExecutable": false,
+      "icon": "build/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Hand Control"
+    }
+  }
+}
