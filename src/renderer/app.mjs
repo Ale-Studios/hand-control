@@ -273,7 +273,8 @@ const SCHEMA = () => [
   { id: 'camera.delegate', type: 'select', label: 'Compute engine', restart: true, options: [['auto', 'Automatic (graphics card, then processor)'], ['GPU', 'Graphics card (GPU)'], ['CPU', 'Processor (CPU)']], help: 'If you see few frames per second, try changing this.' },
   { id: 'ui.hudColor', type: 'select', label: 'HUD colour', options: [['ice', 'Ice'], ['amber', 'Amber'], ['mint', 'Mint']] },
   { id: 'ui.videoDim', type: 'range', min: 0.1, max: 1, step: 0.05, label: 'Camera image brightness', fmt: (v) => Math.round(v * 100) + '%', help: 'Lower = the HUD stands out more (and less of you is shown on screen).' },
-  { id: 'ui.glass', type: 'select', label: 'Window glass effect', options: [['mica', 'Mica (subtle)'], ['acrylic', 'Acrylic (more transparent)'], ['none', 'Off (solid)']], help: 'Windows 11 only.' },
+  { id: 'ui.glass', type: 'select', label: 'Window glass effect', options: [['acrylic', 'Acrylic (see-through, blurred)'], ['mica', 'Mica (subtle)'], ['none', 'Off (solid)']], help: 'Windows 11 only.' },
+  { id: 'ui.tint', type: 'range', min: 0.1, max: 0.9, step: 0.05, label: 'Glass tint', fmt: (v) => Math.round(v * 100) + '%', help: 'Lower = more see-through. Raise it if the text is hard to read over a bright background.' },
   { id: 'ui.trail', type: 'check', label: 'Show the pointer trail' },
   { id: 'ui.showSkeleton', type: 'check', label: 'Show the hand skeleton' },
   { id: 'ui.showArea', type: 'check', label: 'Show the active area' },
@@ -358,6 +359,7 @@ function applyMirror() { $('viewport').classList.toggle('nomirror', !S.camera.mi
 function applyUi() {
   document.documentElement.dataset.hud = S.ui.hudColor;
   $('viewport').style.setProperty('--vdim', String(S.ui.videoDim));
+  document.documentElement.style.setProperty('--tint', String(S.ui.tint));
 }
 function setGlass(g) { document.documentElement.classList.toggle('glass', g !== 'none'); }
 
@@ -585,6 +587,7 @@ async function init() {
   $('btnToggle').onclick = () => hc.setMode(mode === 'active' ? 'paused' : 'active', mode === 'active' ? 'paused from the button' : 'activated from the button', 'ui');
   $('btnKill').onclick = () => hc.setMode(mode === 'locked' ? 'paused' : 'locked', mode === 'locked' ? 'unlocked from the button' : 'EMERGENCY LOCK (button)', 'ui');
   $('btnHide').onclick = () => hc.hide();
+  $('btnQuit').onclick = () => hc.quit();
   $('btnCam').onclick = () => (cameraOn ? stopCamera() : startCamera());
   $('btnCalib').onclick = calStart;
   $('calibCancel').onclick = () => { calStop(); hc.log('Calibration cancelled'); };

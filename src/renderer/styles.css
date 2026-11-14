@@ -15,6 +15,8 @@
   --hud: #c4ecfa;
   --hud2: #7fd0ee;
   --vdim: .55;
+  --tint: .45;
+  --panel-a: .66;
   --font: Bahnschrift, "Segoe UI", system-ui, sans-serif;
   --mono: "Cascadia Mono", Consolas, monospace;
 }
@@ -25,11 +27,14 @@ html[data-hud="mint"] { --hud: #c2f7e1; --hud2: #5fe0b0; }
 html, body { margin: 0; height: 100%; color: var(--txt); font: 13.5px/1.45 "Segoe UI", system-ui, sans-serif; }
 body { display: flex; flex-direction: column; overflow: hidden; background: radial-gradient(1100px 560px at 75% -15%, #252a31 0%, var(--bg) 62%); }
 /* with the glass effect on, the window itself is translucent */
-html.glass body { background: linear-gradient(180deg, rgba(18, 20, 24, .5), rgba(12, 14, 17, .72)); }
+html.glass body { background: linear-gradient(180deg, rgba(18, 20, 24, var(--tint)), rgba(12, 14, 17, calc(var(--tint) * 1.15))); }
+html.glass { --panel-a: calc(var(--tint) * .8); }
 ::-webkit-scrollbar { width: 8px; } ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, .14); border-radius: 4px; }
 
-header { display: flex; align-items: center; gap: 14px; padding: 12px 18px; border-bottom: 1px solid var(--line); }
+/* the header doubles as the window title bar: drag it to move the window; the right padding leaves room for the Windows buttons */
+header { display: flex; align-items: center; gap: 14px; height: 46px; padding: 0 156px 0 18px; border-bottom: 1px solid var(--line); -webkit-app-region: drag; }
+header .btn, header .chip { -webkit-app-region: no-drag; }
 .brand { display: flex; align-items: center; gap: 10px; font: 300 15px var(--font); letter-spacing: .32em; color: var(--silver); }
 .brand b { font-weight: 300; }
 .brand small { color: var(--muted); font: 10px var(--mono); letter-spacing: .06em; }
@@ -96,7 +101,7 @@ main { flex: 1; display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap:
 .strip b { font: 400 14px var(--mono); color: var(--silver); font-variant-numeric: tabular-nums; }
 .privacy { color: var(--muted); font-size: 11px; letter-spacing: .02em; }
 
-aside { background: var(--glass); backdrop-filter: blur(18px) saturate(1.2); border: 1px solid var(--line); border-radius: 3px; display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
+aside { background: rgba(22, 25, 29, var(--panel-a)); backdrop-filter: blur(18px) saturate(1.2); border: 1px solid var(--line); border-radius: 3px; display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
 nav#tabs { display: flex; border-bottom: 1px solid var(--line); }
 nav#tabs button { flex: 1; padding: 12px 4px; background: none; border: 0; color: var(--muted); font: 400 10.5px var(--font); letter-spacing: .24em; text-transform: uppercase; cursor: pointer; border-bottom: 1px solid transparent; margin-bottom: -1px; }
 nav#tabs button:hover { color: var(--txt); }

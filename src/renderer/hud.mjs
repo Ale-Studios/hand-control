@@ -117,21 +117,6 @@ export class HudRenderer {
       ctx.fillStyle = hexA(col.b, main ? 0.1 : 0.04);
       ctx.fill();
 
-      // rotating rings around the palm
-      if (main) {
-        const c = { x: (pts[0].x + pts[9].x) / 2, y: (pts[0].y + pts[9].y) / 2 };
-        const r = Math.hypot(pts[0].x - pts[9].x, pts[0].y - pts[9].y) * 1.3;
-        ctx.lineWidth = k;
-        ctx.strokeStyle = hexA(col.a, 0.3); ctx.setLineDash([r * 0.5, r * 0.22, r * 0.12, r * 0.22]); ctx.lineDashOffset = -this.spin * r * 1.8;
-        ctx.beginPath(); ctx.arc(c.x, c.y, r, 0, Math.PI * 2); ctx.stroke();
-        ctx.strokeStyle = hexA(col.a, 0.18); ctx.setLineDash([r * 0.3, r * 0.3]); ctx.lineDashOffset = this.spin * r * 2.4;
-        ctx.beginPath(); ctx.arc(c.x, c.y, r * 1.28, 0, Math.PI * 2); ctx.stroke();
-        ctx.setLineDash([]); ctx.lineDashOffset = 0;
-        ctx.strokeStyle = hexA(col.a, 0.85); ctx.lineWidth = 1.8 * k; ctx.shadowColor = col.b; ctx.shadowBlur = 8 * k;
-        ctx.beginPath(); ctx.arc(c.x, c.y, r * 1.1, this.spin * 1.6, this.spin * 1.6 + 0.8); ctx.stroke();
-        ctx.shadowBlur = 0;
-      }
-
       // bones with a soft glow
       ctx.shadowColor = col.b; ctx.shadowBlur = (main ? 10 : 4) * k;
       ctx.strokeStyle = hexA(col.a, aBone); ctx.lineWidth = (main ? 1.4 : 1) * k;
@@ -218,7 +203,7 @@ export class HudRenderer {
       const r = (hud.pressed ? 9 : 14) * k;
       ctx.shadowColor = c; ctx.shadowBlur = 10 * k;
       ctx.strokeStyle = c; ctx.lineWidth = 1.4 * k;
-      ctx.setLineDash([5 * k, 5 * k]); ctx.lineDashOffset = -this.spin * 28 * k;
+      ctx.setLineDash([]);
       ctx.beginPath(); ctx.arc(px, py, r, 0, Math.PI * 2); ctx.stroke();
       ctx.setLineDash([]); ctx.lineDashOffset = 0;
       ctx.beginPath();

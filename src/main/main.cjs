@@ -190,6 +190,9 @@ function createWindow() {
   win = new BrowserWindow({
     width: 1180, height: 780, minWidth: 940, minHeight: 640,
     title: 'Hand Control',
+    // frameless look: our own header is the title bar; Windows still draws the minimise/maximise/close buttons on top of it
+    titleBarStyle: 'hidden',
+    titleBarOverlay: { color: '#00000000', symbolColor: '#cfd6de', height: 46 },
     backgroundColor: g === 'none' ? '#16181b' : '#00000000',
     ...(g !== 'none' ? { backgroundMaterial: g } : {}),
     icon: path.join(__dirname, '..', '..', 'assets', 'icon.png'),
