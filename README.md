@@ -19,7 +19,9 @@ A camera watches your hand; **everything stays on your PC** (no internet, no clo
 | ✊ **Closed fist, held still** | **emergency lock** |
 | ⌨️ **Ctrl+Alt+K** | **emergency lock** from the keyboard (again = unlock, into pause) |
 
-Also: a preview with the hand skeleton, an always-on-top status badge (ACTIVE / PAUSED / LOCKED / hand not seen, plus a red dot
+Also: a HUD-style preview (dimmed camera image; glowing hand skeleton, translucent palm, tracking box, pointer reticle with a fading
+trail, live pinch gauge; colour, brightness and trail are adjustable in *Settings → Camera*; *Window glass effect* gives a
+translucent Windows 11 window), an always-on-top status badge (ACTIVE / PAUSED / LOCKED / hand not seen, plus a red dot
 while the camera is on), guided calibration of the movement area, settings for sensitivity / smoothing / area / distance,
 and a **Measure** tab (latency, jitter, precision).
 

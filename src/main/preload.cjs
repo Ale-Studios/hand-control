@@ -28,6 +28,7 @@ contextBridge.exposeInMainWorld('hc', {
     hotkeys: (cb) => on('hotkeys', cb),
     blocked: (cb) => on('blocked', cb),
     realMouse: (cb) => on('real-mouse', cb),
+    glass: (cb) => on('glass', cb),
     e2eFrame: (cb) => on('e2e:frame', cb),
   },
   clock: () => performance.timeOrigin + performance.now(),

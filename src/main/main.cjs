@@ -2,7 +2,7 @@
 // This is the SECURITY AUTHORITY: the mode (ACTIVE / PAUSED / LOCKED) lives here, and no
 // mouse command gets through unless we are ACTIVE, whatever the camera window says.
 
-const { app, BrowserWindow, ipcMain, globalShortcut, Tray, Menu, nativeImage, screen, session, shell, protocol } = require('electron');
+const { app, BrowserWindow, ipcMain, globalShortcut, Tray, Menu, nativeImage, nativeTheme, screen, session, shell, protocol } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { EventEmitter } = require('events');
@@ -172,11 +172,26 @@ function registerHotkeys() {
 const hotkeyInfo = () => ({ kill: killKeyUsed, killOk: killKeyOk, pause: settings.safety.pauseKey, pauseOk: pauseKeyOk });
 
 // ─────────────────────────── windows ───────────────────────────
+// Glass effect (Windows 11): the window background becomes a translucent system material.
+const glassMode = () => (E2E ? 'none' : settings.ui.glass);
+function applyGlass() {
+  if (!win || win.isDestroyed()) return;
+  const g = glassMode();
+  try {
+    win.setBackgroundMaterial(g === 'none' ? 'none' : g);
+    win.setBackgroundColor(g === 'none' ? '#16181b' : '#00000000');
+  } catch { /* older Windows: no material, the opaque theme is used */ }
+  send('glass', g);
+}
+
 function createWindow() {
+  nativeTheme.themeSource = 'dark';
+  const g = glassMode();
   win = new BrowserWindow({
     width: 1180, height: 780, minWidth: 940, minHeight: 640,
     title: 'Hand Control',
-    backgroundColor: '#1a1d21',
+    backgroundColor: g === 'none' ? '#16181b' : '#00000000',
+    ...(g !== 'none' ? { backgroundMaterial: g } : {}),
     icon: path.join(__dirname, '..', '..', 'assets', 'icon.png'),
     show: !(flag('--hidden') || E2E),
     webPreferences: {
@@ -275,7 +290,7 @@ function wireIpc() {
     return {
       settings, defaults: DEFAULTS, mode, presets: DISTANCE_PRESETS, screen: { w: s.w, h: s.h },
       hotkeys: hotkeyInfo(), log: logLines, blocked: blockedRequests,
-      info: { delegate: DELEGATE, version: app.getVersion(), e2e: E2E, bench: BENCH, userData: app.getPath('userData'), displays: screen.getAllDisplays().length },
+      info: { glass: glassMode(), delegate: DELEGATE, version: app.getVersion(), e2e: E2E, bench: BENCH, userData: app.getPath('userData'), displays: screen.getAllDisplays().length },
     };
   });
 
@@ -287,6 +302,7 @@ function wireIpc() {
     input.realMouseWins = settings.safety.realMouseWins;
     if (settings.safety.killKey !== before.safety.killKey || settings.safety.pauseKey !== before.safety.pauseKey) registerHotkeys();
     if (settings.control.display !== before.control.display) applyScreen();
+    if (settings.ui.glass !== before.ui.glass) applyGlass();
     send('settings', settings);
     return settings;
   });

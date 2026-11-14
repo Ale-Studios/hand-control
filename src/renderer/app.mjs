@@ -3,6 +3,7 @@ import { GestureEngine } from 'hc://app/core/engine.mjs';
 import { areaFromCorners, mapToScreen } from 'hc://app/core/mapping.mjs';
 import { median } from 'hc://app/core/filters.mjs';
 import { Tracker } from './tracker.mjs';
+import { HudRenderer } from './hud.mjs';
 
 const hc = window.hc;
 const $ = (id) => document.getElementById(id);
@@ -75,7 +76,7 @@ function refreshStatus() {
   t.disabled = mode === 'locked' || !cameraOn;
   $('btnKill').textContent = mode === 'locked' ? '🔓 Unlock (stays paused)' : '⛔ EMERGENCY LOCK';
   $('btnCam').textContent = cameraOn ? 'Turn camera off' : 'Turn camera on';
-  $('camOff').className = 'camOff' + (cameraOn ? ' hidden' : '');
+  $('camOff').className = 'camOff' + (cameraOn || (info.e2e && stat.totalFrames > 0) ? ' hidden' : '');
   $('camOff').textContent = cameraError || 'Camera off';
 
   const b = $('banner');
@@ -202,7 +203,7 @@ function onFrame(frame) {
   if (cal.active) calFeed(hud, frame.t);
   if (rec.active) recFeed(frame, hud);
   if (jitter.active) jitterFeed(hud);
-  if (!info.e2e) draw(frame, hud);
+  draw(frame, hud);
   refreshHold();
 }
 
@@ -210,45 +211,13 @@ function onFrame(frame) {
 const video = $('video');
 const ov = $('overlay');
 const octx = ov.getContext('2d');
+const hudr = new HudRenderer();
 function draw(frame, hud) {
   if (document.hidden) return;
-  const W = video.videoWidth, H = video.videoHeight;
-  if (!W) return;
+  let W = video.videoWidth, H = video.videoHeight;
+  if (!W) { if (!info.e2e) return; W = 1280; H = 720; } // tests draw on an empty canvas
   if (ov.width !== W || ov.height !== H) { ov.width = W; ov.height = H; }
-  octx.clearRect(0, 0, W, H);
-  const lw = Math.max(2, W / 420);
-  const mirror = S.camera.mirror;
-  const toX = (u) => (mirror ? 1 - u : u) * W; // u is already mirrored: go back to image coordinates
-  const roi = frame.meta && frame.meta.roi;
-  if (roi && (roi.w < W * 0.98 || roi.h < H * 0.98)) {
-    octx.setLineDash([lw * 3, lw * 3]); octx.strokeStyle = 'rgba(190,200,212,.55)'; octx.lineWidth = lw;
-    octx.strokeRect(roi.x, roi.y, roi.w, roi.h); octx.setLineDash([]);
-  }
-  if (S.ui.showArea) {
-    const a = S.control.area, g = Math.max(0.2, S.control.sensitivity);
-    const w = a.w / g, h = a.h / g;
-    const x0 = toX(a.cx - w / 2), x1 = toX(a.cx + w / 2);
-    octx.strokeStyle = mode === 'active' ? 'rgba(52,211,153,.9)' : 'rgba(226,232,240,.8)';
-    octx.lineWidth = lw * 1.4; octx.setLineDash([lw * 5, lw * 3]);
-    octx.strokeRect(Math.min(x0, x1), (a.cy - h / 2) * H, Math.abs(x1 - x0), h * H);
-    octx.setLineDash([]);
-  }
-  if (S.ui.showSkeleton) {
-    frame.hands.forEach((hand, i) => {
-      const main = hud && hud.handVisible && i === 0;
-      octx.strokeStyle = main ? '#dfe5ec' : 'rgba(255,255,255,.3)'; octx.lineWidth = lw;
-      for (const [p, q] of HAND_CONNECTIONS) {
-        octx.beginPath(); octx.moveTo(hand.lm[p].x * W, hand.lm[p].y * H); octx.lineTo(hand.lm[q].x * W, hand.lm[q].y * H); octx.stroke();
-      }
-      octx.fillStyle = main ? '#ffffff' : 'rgba(255,255,255,.45)';
-      for (const p of hand.lm) { octx.beginPath(); octx.arc(p.x * W, p.y * H, lw * 1.4, 0, Math.PI * 2); octx.fill(); }
-    });
-  }
-  if (hud && hud.anchor) {
-    const x = toX(hud.anchor.u), y = hud.anchor.v * H;
-    octx.beginPath(); octx.arc(x, y, lw * 5, 0, Math.PI * 2);
-    octx.strokeStyle = hud.pressed ? '#f87171' : mode === 'active' ? '#34d399' : '#fbbf24'; octx.lineWidth = lw * 1.6; octx.stroke();
-  }
+  hudr.draw(octx, W, H, { frame, hud, S, mode, screen: screenSize, poseName: hud ? POSE_EN[hud.pose] : '', px: W / Math.max(1, ov.clientWidth) });
 }
 
 // ───────────────────────── camera ─────────────────────────
@@ -302,6 +271,10 @@ const SCHEMA = () => [
     options: Object.entries(PRESETS).map(([k, v]) => [k, v.label]),
     help: 'The farther you are, the more the app zooms in around your hand (needs a 1080p camera).' },
   { id: 'camera.delegate', type: 'select', label: 'Compute engine', restart: true, options: [['auto', 'Automatic (graphics card, then processor)'], ['GPU', 'Graphics card (GPU)'], ['CPU', 'Processor (CPU)']], help: 'If you see few frames per second, try changing this.' },
+  { id: 'ui.hudColor', type: 'select', label: 'HUD colour', options: [['ice', 'Ice'], ['amber', 'Amber'], ['mint', 'Mint']] },
+  { id: 'ui.videoDim', type: 'range', min: 0.1, max: 1, step: 0.05, label: 'Camera image brightness', fmt: (v) => Math.round(v * 100) + '%', help: 'Lower = the HUD stands out more (and less of you is shown on screen).' },
+  { id: 'ui.glass', type: 'select', label: 'Window glass effect', options: [['mica', 'Mica (subtle)'], ['acrylic', 'Acrylic (more transparent)'], ['none', 'Off (solid)']], help: 'Windows 11 only.' },
+  { id: 'ui.trail', type: 'check', label: 'Show the pointer trail' },
   { id: 'ui.showSkeleton', type: 'check', label: 'Show the hand skeleton' },
   { id: 'ui.showArea', type: 'check', label: 'Show the active area' },
   { g: 'Cursor' },
@@ -370,6 +343,7 @@ function fillCameraSelect(cams) {
 let patchTimer = null; let pendingPatch = {};
 function changeSetting(f, value) {
   setLocal(f.id, value);
+  if (f.id.startsWith('ui.')) applyUi();
   deepMerge(pendingPatch, patchFor(f.id, value));
   clearTimeout(patchTimer);
   patchTimer = setTimeout(async () => {
@@ -380,7 +354,12 @@ function changeSetting(f, value) {
   }, 150);
 }
 function deepMerge(a, b) { for (const k of Object.keys(b)) { if (b[k] && typeof b[k] === 'object') { a[k] = a[k] || {}; deepMerge(a[k], b[k]); } else a[k] = b[k]; } }
-function applyMirror() { $('viewport').classList.toggle('nomirror', !S.camera.mirror); }
+function applyMirror() { $('viewport').classList.toggle('nomirror', !S.camera.mirror); applyUi(); }
+function applyUi() {
+  document.documentElement.dataset.hud = S.ui.hudColor;
+  $('viewport').style.setProperty('--vdim', String(S.ui.videoDim));
+}
+function setGlass(g) { document.documentElement.classList.toggle('glass', g !== 'none'); }
 
 function syncFormFromSettings() {
   if (!formBuilt) return;
@@ -591,10 +570,11 @@ async function init() {
   $('blocked').textContent = st.blocked;
   st.log.forEach(addLogLine);
   showHotkeys(st.hotkeys);
-  buildForm(); applyMirror();
+  buildForm(); applyMirror(); setGlass(info.glass);
 
   hc.on.mode((m) => { mode = m.mode; engine.setMode(mode); refreshStatus(); refreshHold(); });
   hc.on.settings((s) => { S = s; syncFormFromSettings(); applyMirror(); });
+  hc.on.glass(setGlass);
   hc.on.screen((s) => { screenSize = s; engine.setScreen(s.w, s.h); });
   hc.on.log(addLogLine);
   hc.on.hotkeys(showHotkeys);

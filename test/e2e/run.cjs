@@ -287,6 +287,19 @@ setTimeout(() => { console.error('Test TIMEOUT: exiting'); try { require('../../
     target.hide();
     api.win().show(); await sleep(500);
     const out = process.env.HC_E2E_SHOT || path.join(__dirname, 'ui-shot.png');
+    // HUD preview with synthetic hands (control stays PAUSED, so nothing touches the real mouse)
+    api.setMode('paused', 'screenshot', 'ui');
+    await api.win().webContents.executeJavaScript(`document.querySelector('#tabs button[data-tab="commands"]').click()`);
+    await drive(500, () => null);
+    const big = (pose, sx, sy) => makeHand({ pose, at: at(sx, sy), size: 0.3 }); // a hand at a realistic size
+    await drive(900, (ms) => big('point', 0.25 + 0.4 * (ms / 900), 0.35 + 0.2 * Math.sin(ms / 160)));
+    fs.writeFileSync(out.replace('.png', '-hud-point.png'), (await api.win().webContents.capturePage()).toPNG());
+    await drive(500, () => big('pinch', 0.6, 0.5));
+    fs.writeFileSync(out.replace('.png', '-hud-pinch.png'), (await api.win().webContents.capturePage()).toPNG());
+    await drive(500, () => big('scroll', 0.5, 0.5));
+    fs.writeFileSync(out.replace('.png', '-hud-scroll.png'), (await api.win().webContents.capturePage()).toPNG());
+    await drive(600, () => null);
+    fs.writeFileSync(out.replace('.png', '-hud-idle.png'), (await api.win().webContents.capturePage()).toPNG());
     for (const tab of ['commands', 'settings', 'gestures', 'measure']) {
       await api.win().webContents.executeJavaScript(`document.querySelector('#tabs button[data-tab="${tab}"]').click()`);
       await sleep(350);

@@ -40,6 +40,10 @@ const DEFAULTS = {
     startCamera: true,
     showSkeleton: true,
     showArea: true,
+    videoDim: 0.55,        // camera image brightness behind the HUD (0.1 = almost black, 1 = full)
+    hudColor: 'ice',       // ice | amber | mint
+    trail: true,           // fading trail behind the pointer
+    glass: 'mica',         // window material (Windows 11): none | mica | acrylic
   },
 };
 
