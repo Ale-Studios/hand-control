@@ -80,14 +80,30 @@ export class Tracker {
     this.numHands = numHands;
     this.wantDelegate = String(delegate || 'auto').toUpperCase();
     this.hooks.onStatus('starting', 'Turning the camera on…');
-    const video = {
-      width: { ideal: preset.width }, height: { ideal: preset.height }, frameRate: { ideal: 30, max: 30 },
-    };
-    if (deviceId) video.deviceId = { exact: deviceId };
-    try {
-      this.stream = await navigator.mediaDevices.getUserMedia({ video, audio: false });
-    } catch (e) {
-      this.hooks.onStatus('error', 'Cannot open the camera (' + (e && e.name || 'error') + '). Is another app using it, or is permission denied?');
+    // Some cameras cannot open at the requested size (typically 1080p: USB bandwidth or driver limits) and
+    // Windows answers "NotReadableError". So we try the requested size first, then smaller ones, then anything.
+    const sizes = [[preset.width, preset.height], [1280, 720], [640, 480]]
+      .filter((s, i, a) => a.findIndex((x) => x[0] === s[0] && x[1] === s[1]) === i);
+    let lastErr = null;
+    const attempts = [...sizes.map(([w, h]) => ({ label: `${w}x${h}`, w, h })), { label: 'any size', w: 0, h: 0 }];
+    for (const a of attempts) {
+      const video = a.w ? { width: { ideal: a.w }, height: { ideal: a.h }, frameRate: { ideal: 30 } } : {};
+      if (deviceId) video.deviceId = { exact: deviceId };
+      try {
+        this.stream = await navigator.mediaDevices.getUserMedia({ video: Object.keys(video).length ? video : true, audio: false });
+        if (a !== attempts[0]) this.hooks.onStatus('info', `The camera could not open at ${attempts[0].label}; using ${a.label} instead.`);
+        break;
+      } catch (e) {
+        lastErr = e;
+        if (e && (e.name === 'NotAllowedError' || e.name === 'SecurityError' || e.name === 'NotFoundError')) break; // no point in retrying
+        this.hooks.onStatus('info', `The camera refused ${a.label} (${e && e.name}); trying another size…`);
+      }
+    }
+    if (!this.stream) {
+      const why = lastErr && lastErr.name === 'NotAllowedError' ? 'Permission to use the camera was denied (check Windows → Privacy → Camera).'
+        : lastErr && lastErr.name === 'NotFoundError' ? 'The chosen camera was not found. Pick another one in Settings → Camera.'
+          : 'Is another app using it, or is it plugged into a very busy USB port?';
+      this.hooks.onStatus('error', `Cannot open the camera (${(lastErr && lastErr.name) || 'error'}). ${why}`);
       return false;
     }
     this.video.srcObject = this.stream;

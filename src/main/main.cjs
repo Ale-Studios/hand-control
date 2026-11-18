@@ -96,6 +96,7 @@ const logLines = [];
 
 function addLog(text) {
   const line = { t: Date.now(), text };
+  if (BENCH || flag('--verbose')) console.log('[log] ' + text);
   logLines.push(line);
   if (logLines.length > 80) logLines.shift();
   send('log', line);
