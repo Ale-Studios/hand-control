@@ -1,6 +1,6 @@
 // Hand Control — main window: wires the camera, the gestures and the interface together.
 import { GestureEngine } from 'hc://app/core/engine.mjs';
-import { areaFromCorners, mapToScreen } from 'hc://app/core/mapping.mjs';
+import { areaFromCorners, mapToScreen, MIN_AREA } from 'hc://app/core/mapping.mjs';
 import { median } from 'hc://app/core/filters.mjs';
 import { Tracker } from './tracker.mjs';
 import { HudRenderer } from './hud.mjs';
@@ -281,8 +281,8 @@ const SCHEMA = () => [
   { g: 'Cursor' },
   { id: 'control.sensitivity', type: 'range', min: 0.5, max: 3, step: 0.05, label: 'Sensitivity', fmt: (v) => v.toFixed(2) + '×', help: 'Higher = smaller movements are enough.' },
   { id: 'control.smoothing', type: 'range', min: 0, max: 1, step: 0.02, label: 'Jitter smoothing', fmt: (v) => Math.round(v * 100) + '%', help: 'Higher = steadier cursor, but a little slower to follow you.' },
-  { id: 'control.area.w', type: 'range', min: 0.15, max: 1, step: 0.01, label: 'Active area — width', fmt: (v) => Math.round(v * 100) + '%' },
-  { id: 'control.area.h', type: 'range', min: 0.15, max: 1, step: 0.01, label: 'Active area — height', fmt: (v) => Math.round(v * 100) + '%' },
+  { id: 'control.area.w', type: 'range', min: 0.28, max: 1, step: 0.01, label: 'Active area — width', fmt: (v) => Math.round(v * 100) + '%' },
+  { id: 'control.area.h', type: 'range', min: 0.28, max: 1, step: 0.01, label: 'Active area — height', fmt: (v) => Math.round(v * 100) + '%' },
   { id: 'control.area.cx', type: 'range', min: 0.1, max: 0.9, step: 0.01, label: 'Active area — horizontal position', fmt: (v) => Math.round(v * 100) + '%' },
   { id: 'control.area.cy', type: 'range', min: 0.1, max: 0.9, step: 0.01, label: 'Active area — vertical position', fmt: (v) => Math.round(v * 100) + '%' },
   { id: 'control.pointAt', type: 'select', label: 'Point that moves the cursor', options: [['knuckle', 'Index knuckle (steadier)'], ['tip', 'Index fingertip']] },
@@ -412,9 +412,13 @@ function calFeed(hud, t) {
     S.control.area = area; S.control.sensitivity = 1;
     hc.setSettings({ control: { area, sensitivity: 1 } });
     syncFormFromSettings();
+    // measured spread (with the margin) smaller than the minimum area → the area was enlarged
+    const small = Math.abs(b.u - a.u) * 1.12 < MIN_AREA || Math.abs(b.v - a.v) * 1.12 < MIN_AREA;
     $('calibTitle').textContent = 'Done! Active area set';
-    $('calibSub').textContent = 'The dashed rectangle in the preview is your area.';
-    setTimeout(calStop, 2200);
+    $('calibSub').textContent = small
+      ? 'You moved your arm very little, so I used the minimum area. For better precision, reach further between the two corners and calibrate again.'
+      : 'The bracketed rectangle in the preview is your area.';
+    setTimeout(calStop, small ? 5000 : 2200);
     hc.log('Calibration completed');
   }
 }

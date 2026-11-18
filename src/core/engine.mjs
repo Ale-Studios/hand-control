@@ -23,6 +23,7 @@ const PINCH_ON = 0.28;     // fingertip distance / hand size for a "pinch"
 const PINCH_OFF = 1.5;     // to open the pinch you need 1.5x the threshold
 const INDEX_BENT_MIN = 1.12; // in a pinch the index is slightly bent; in a fist it is fully closed
 const STEADY_MAX = 0.10;   // how far the hand may move (frame fraction) during a "hold still"
+const REF_W = 1280, REF_H = 720; // reference image size for the pointer filter
 const LOST_RELEASE_MS = 350;
 const HAND_FLICKER_MS = 150;
 const WHEEL_STEP = 40;     // wheel "clicks" are multiples of 40 (120 = one full notch)
@@ -196,13 +197,14 @@ export class GestureEngine {
 
   _pointer(anchor, t, S) {
     const c = S.control;
-    const sc = mapToScreen(anchor.u, anchor.v, c.area, c.sensitivity, c.snap);
     const p = smoothingToParams(c.smoothing);
     this.fx.configure(p); this.fy.configure(p);
-    // the filter works in pixels: the same amount of "jitter" weighs the same on every screen
-    const x = this.fx.filter(sc.x * this.screen.w, t) / this.screen.w;
-    const y = this.fy.filter(sc.y * this.screen.h, t) / this.screen.h;
-    this.ptr = { x: Math.min(1, Math.max(0, x)), y: Math.min(1, Math.max(0, y)) };
+    // The filter works on the CAMERA measurement (in pixels of a 1280x720 reference image), BEFORE the
+    // mapping to the screen. If it worked on screen pixels, a small active area (a big magnification)
+    // would make the measurement noise look like fast movement and the filter would stop smoothing.
+    const u = this.fx.filter(anchor.u * REF_W, t) / REF_W;
+    const v = this.fy.filter(anchor.v * REF_H, t) / REF_H;
+    this.ptr = mapToScreen(u, v, c.area, c.sensitivity, c.snap);
     this.hist.push({ t, x: this.ptr.x, y: this.ptr.y });
     while (this.hist.length > 2 && t - this.hist[0].t > 700) this.hist.shift();
   }

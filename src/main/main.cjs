@@ -7,7 +7,7 @@ const path = require('path');
 const fs = require('fs');
 const { EventEmitter } = require('events');
 const { performance } = require('perf_hooks');
-const { DEFAULTS, DISTANCE_PRESETS, merge } = require('../core/defaults.cjs');
+const { DEFAULTS, DISTANCE_PRESETS, merge, enforceMinArea } = require('../core/defaults.cjs');
 const { pngFor } = require('./icons.cjs');
 const { Input } = require('./input.cjs');
 
@@ -71,6 +71,7 @@ let settings = merge(DEFAULTS, {});
 function loadSettings() {
   settingsFile = path.join(app.getPath('userData'), 'settings.json');
   try { settings = merge(DEFAULTS, JSON.parse(fs.readFileSync(settingsFile, 'utf8'))); } catch { settings = merge(DEFAULTS, {}); }
+  settings.control.area = enforceMinArea(settings.control.area); // a saved area that is too small is enlarged
 }
 function saveSettings() {
   try {

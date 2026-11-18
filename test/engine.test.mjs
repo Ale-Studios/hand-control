@@ -59,6 +59,30 @@ test('active area: corners and centre', () => {
   assert.ok(a.w > 0.4 && a.cx > 0.49 && a.cx < 0.51);
 });
 
+test('calibration never produces a tiny area (it would magnify the camera noise)', () => {
+  const a = areaFromCorners({ u: 0.3, v: 0.5 }, { u: 0.7, v: 0.55 }); // almost no vertical travel
+  assert.ok(a.h >= 0.28 - 1e-9 && a.w >= 0.28 - 1e-9, `area ${a.w.toFixed(2)} x ${a.h.toFixed(2)} is at least the minimum`);
+  assert.ok(a.cy - a.h / 2 >= 0 && a.cy + a.h / 2 <= 1, 'stays inside the frame');
+});
+
+test('smoothing still works with a small active area (the filter works on the camera measurement)', () => {
+  // the same camera noise, with a big area and with the smallest allowed one: the output must stay calm in both
+  for (const area of [{ cx: 0.5, cy: 0.5, w: 0.8, h: 0.8 }, { cx: 0.5, cy: 0.5, w: 0.28, h: 0.28 }]) {
+    const { eng, events } = setup({ control: { area } });
+    eng.setMode('active');
+    let seed = 11; const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647 - 0.5);
+    let t = 0; const ys = [];
+    for (let i = 0; i < 90; i++, t += 66) {
+      eng.update(frame(t, makeHand({ pose: 'point', at: { x: 0.5 + rnd() * 0.004, y: 0.5 + rnd() * 0.004 } })));
+    }
+    const moves = events.filter((e) => e.type === 'move').slice(30);
+    const sd = (a) => { const m = a.reduce((p, c) => p + c) / a.length; return Math.sqrt(a.reduce((p, c) => p + (c - m) ** 2, 0) / a.length); };
+    const out = sd(moves.map((e) => e.y * 1080));
+    const raw = (0.004 * 720 / Math.sqrt(12) * 720 / 720) * (1080 / (area.h * 720));   // uniform noise → sd, mapped to screen px
+    assert.ok(out < raw * 0.75, `area ${area.h}: output jitter ${out.toFixed(1)} px vs raw ${raw.toFixed(1)} px`);
+  }
+});
+
 test('while PAUSED the hand moves nothing', () => {
   const { eng, events } = setup();
   run(eng, 0, 1000, () => makeHand({ pose: 'point', at: CENTER }));

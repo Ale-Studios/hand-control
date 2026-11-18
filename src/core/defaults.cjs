@@ -77,4 +77,12 @@ function merge(base, patch) {
   return out;
 }
 
-module.exports = { DEFAULTS, DISTANCE_PRESETS, merge, clone };
+/** Smallest allowed active area (same rule as in mapping.mjs): smaller areas magnify the camera noise too much. */
+const MIN_AREA = 0.28;
+function enforceMinArea(a) {
+  const w = Math.min(1, Math.max(MIN_AREA, a.w));
+  const h = Math.min(1, Math.max(MIN_AREA, a.h));
+  return { cx: Math.min(1 - w / 2, Math.max(w / 2, a.cx)), cy: Math.min(1 - h / 2, Math.max(h / 2, a.cy)), w, h };
+}
+
+module.exports = { DEFAULTS, DISTANCE_PRESETS, merge, clone, enforceMinArea, MIN_AREA };
