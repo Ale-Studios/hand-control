@@ -11,6 +11,9 @@ export const L = {
   PINKY_MCP: 17, PINKY_TIP: 20,
 };
 
+/** The palm: wrist + the four finger bases. Barely moves when the fingers do. */
+export const PALM_POINTS = [0, 5, 9, 13, 17];
+
 export function dist(a, b) {
   return Math.hypot(a.x - b.x, a.y - b.y, (a.z || 0) - (b.z || 0));
 }
@@ -45,6 +48,8 @@ export function measure(w) {
     },
     pinchIndex: dist(w[L.THUMB_TIP], w[L.INDEX_TIP]) / hs,
     pinchMiddle: dist(w[L.THUMB_TIP], w[L.MIDDLE_TIP]) / hs,
+    pinchRing: dist(w[L.THUMB_TIP], w[L.RING_TIP]) / hs,
+    pinchPinky: dist(w[L.THUMB_TIP], w[L.PINKY_TIP]) / hs,
   };
 }
 

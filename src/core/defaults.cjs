@@ -11,7 +11,9 @@ const DEFAULTS = {
   },
   control: {
     hand: 'any',           // any | right | left
-    pointAt: 'knuckle',    // knuckle = index knuckle (steady) | tip = fingertip
+    pointAt: 'knuckle',    // knuckle = index knuckle (steady) | tip = fingertip | palm = centre of the palm (most steady)
+    twoHands: false,       // two-hand mode: one hand steers, the other clicks / drags / scrolls
+    cursorHand: 'right',   // which hand steers in two-hand mode (right | left)
     sensitivity: 1.0,      // 0.5..3: higher = smaller movements are enough
     smoothing: 0.5,        // 0..1: higher = steadier cursor but slower
     area: { cx: 0.5, cy: 0.5, w: 0.5, h: 0.45 }, // active area inside the camera frame
@@ -33,8 +35,26 @@ const DEFAULTS = {
     lockHoldMs: 1000,      // closed fist for the emergency lock
     autoPauseSec: 20,      // hand not seen for this long = pause (0 = never)
     realMouseWins: true,   // if you move the physical mouse, hand control stops for a moment
+    dryRun: false,         // test mode: show what would happen without touching the mouse or keyboard
     killKey: 'CommandOrControl+Alt+K',
     pauseKey: 'CommandOrControl+Alt+P',
+  },
+  actions: {
+    holdMs: 500,                          // how long an action gesture is held before it fires
+    ringPinch: 'launcher',                // thumb + ring finger
+    pinkyPinch: 'keys:<cmd>+<tab>',       // thumb + little finger
+    // The launcher tiles: [name, action]. Actions: open:TARGET | keys:COMBO | zoom:in | zoom:out | media:NAME | launcher | none
+    tiles: [
+      ['Files', 'open:explorer'],
+      ['Search', 'keys:<cmd>+s'],
+      ['Keyboard', 'open:osk'],
+      ['Task view', 'keys:<cmd>+<tab>'],
+      ['Desktop', 'keys:<cmd>+d'],
+      ['Screenshot', 'keys:<cmd>+<shift>+s'],
+      ['Zoom in', 'zoom:in'],
+      ['Zoom out', 'zoom:out'],
+      ['Play / pause', 'media:playpause'],
+    ],
   },
   ui: {
     startCamera: true,
@@ -47,6 +67,28 @@ const DEFAULTS = {
     tint: 0.45,            // darkness of the glass (lower = more see-through, higher = easier to read)
   },
 };
+
+// Ready-made actions for the two action gestures (the Settings tab shows them in a list).
+const ACTION_PRESETS = [
+  ['launcher', 'Open the launcher (big tiles)'],
+  ['keys:<cmd>+<tab>', 'Task view (switch windows)'],
+  ['keys:<cmd>+d', 'Show desktop'],
+  ['keys:<cmd>+s', 'Search'],
+  ['keys:<cmd>+<shift>+s', 'Screenshot'],
+  ['zoom:in', 'Zoom in'],
+  ['zoom:out', 'Zoom out'],
+  ['keys:<alt>+<left>', 'Back'],
+  ['keys:<alt>+<right>', 'Forward'],
+  ['keys:<ctrl>+w', 'Close tab'],
+  ['keys:<ctrl>+t', 'New tab'],
+  ['media:playpause', 'Play / pause'],
+  ['media:volup', 'Volume up'],
+  ['media:voldown', 'Volume down'],
+  ['media:mute', 'Mute'],
+  ['open:osk', 'On-screen keyboard'],
+  ['open:explorer', 'File Explorer'],
+  ['none', 'Nothing'],
+];
 
 // How to use the camera at different distances.
 //  width/height → size requested from the camera
@@ -85,4 +127,4 @@ function enforceMinArea(a) {
   return { cx: Math.min(1 - w / 2, Math.max(w / 2, a.cx)), cy: Math.min(1 - h / 2, Math.max(h / 2, a.cy)), w, h };
 }
 
-module.exports = { DEFAULTS, DISTANCE_PRESETS, merge, clone, enforceMinArea, MIN_AREA };
+module.exports = { DEFAULTS, DISTANCE_PRESETS, ACTION_PRESETS, merge, clone, enforceMinArea, MIN_AREA };

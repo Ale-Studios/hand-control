@@ -15,6 +15,8 @@ A camera watches your hand; **everything stays on your PC** (no internet, no clo
 | 🤏 **Pinch thumb + index** | left click · held and moved = drag · two pinches = double click |
 | 🤏 **Pinch thumb + middle** | right click |
 | ✌️ **Index + middle up** | scroll: move your hand up/down |
+| 🤏 **Thumb + ring finger, held ½ s** (index up) | **action 1**: by default the launcher (big tiles) |
+| 🤏 **Thumb + little finger, held ½ s** (index up) | **action 2**: by default task view (switch windows) |
 | 🖐️ **Open hand, held still** | activate / pause (progress bar) |
 | ✊ **Closed fist, held still** | **emergency lock** |
 | ⌨️ **Ctrl+Alt+K** | **emergency lock** from the keyboard (again = unlock, into pause) |
@@ -24,6 +26,36 @@ trail, live pinch gauge; colour, brightness and trail are adjustable in *Setting
 translucent Windows 11 window), an always-on-top status badge (ACTIVE / PAUSED / LOCKED / hand not seen, plus a red dot
 while the camera is on), guided calibration of the movement area, settings for sensitivity / smoothing / area / distance,
 and a **Measure** tab (latency, jitter, precision).
+
+## Actions, launcher and two-hand mode
+
+**Action gestures.** Touch thumb and ring finger (or little finger) for half a second, keeping the index finger up: Hand Control runs
+the action you chose for it (*Settings → Actions*). Ready-made choices: launcher, task view, show desktop, search, screenshot,
+zoom in/out, back/forward, close/new tab, play/pause, volume, on-screen keyboard, File Explorer, nothing.
+
+**Launcher.** A grid of big tiles appears around the cursor (Files, Search, Keyboard, Task view, Desktop, Screenshot, Zoom in/out,
+Play/pause). Point at a tile and pinch to choose it; the *Close* tile (or the same gesture again, or 20 s) closes it. It never takes the
+keyboard focus, so a shortcut goes to the app you were using. Tiles and gestures are stored in `settings.json` as short texts:
+
+| Action text | What it does |
+|---|---|
+| `keys:<ctrl>+<shift>+s` | presses a keyboard shortcut (`<cmd>` is the Windows key) |
+| `zoom:in` / `zoom:out` | Ctrl + mouse wheel at the cursor: zooms in browsers, Explorer, Office, image viewers, maps |
+| `media:playpause` | also `next`, `prev`, `volup`, `voldown`, `mute` |
+| `open:TARGET` | opens an app (`open:notepad`), a file or folder, or a web address (`https:`, `ms-settings:`; the browser is a separate program) |
+| `launcher` / `none` | show the launcher / do nothing |
+
+Actions only run while control is **ACTIVE**; keys are always released afterwards (also by the emergency lock); a mistyped action is
+rejected instead of saved.
+
+**Two-hand mode** (*Settings → Cursor*). One hand steers the cursor, the other clicks, drags and scrolls, so you can click without
+holding the pointing hand still. A fist or an open hand on the helper hand does nothing.
+
+**Cursor point.** *Settings → Cursor → Point that moves the cursor*: index knuckle (steady), **centre of the palm** (steadiest: it does
+not move when the fingers do) or index fingertip (most natural).
+
+**Test mode** (*Settings → Safety*). Hand Control shows in the log what each gesture *would* do, without touching the mouse or the
+keyboard. The badge says TEST MODE. Good for trying gestures with no risk.
 
 ## Quick start
 
@@ -103,9 +135,9 @@ Results and how to read them: [docs/MEASUREMENTS.md](docs/MEASUREMENTS.md).
 ## Testing
 
 ```bash
-npm test          # 17 tests of the gesture "brain" with fake hands (fast, no camera)
+npm test          # 30 tests of the gesture "brain" and of the action texts, with fake hands (fast, no camera)
 npm run test:e2e  # full test: real app → real mouse → a window that records the events (~3 min)
-HC_E2E_ONLY=dbl,kill npm run test:e2e   # only some sections (dbl = double click, kill = emergency, net = network)
+HC_E2E_ONLY=dbl,kill npm run test:e2e   # only some sections (dbl = double click, kill = emergency, actions = actions/launcher/two hands/test mode, net = network)
 ```
 
 `test:e2e` opens a full-screen window that **uses the mouse by itself for ~3 minutes** (do not touch anything) in an isolated

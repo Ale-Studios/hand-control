@@ -33,8 +33,38 @@ const MOUSEEVENTF = {
   MIDDLEDOWN: 0x0020, MIDDLEUP: 0x0040, WHEEL: 0x0800, VIRTUALDESK: 0x4000, ABSOLUTE: 0x8000,
 };
 const KEYEVENTF_KEYUP = 0x0002;
+const KEYEVENTF_EXTENDEDKEY = 0x0001;
 const SIZE = koffi.sizeof(INPUT);
 const MAGIC = 0x48434f4e; // "HCON": signature of our own moves (dwExtraInfo)
+
+// ── keyboard: key names → virtual-key codes ──
+const VK = {
+  ctrl: 0x11, control: 0x11, alt: 0x12, menu: 0x12, shift: 0x10, cmd: 0x5b, win: 0x5b, meta: 0x5b, super: 0x5b,
+  tab: 0x09, enter: 0x0d, return: 0x0d, esc: 0x1b, escape: 0x1b, space: 0x20, backspace: 0x08, delete: 0x2e, del: 0x2e,
+  home: 0x24, end: 0x23, pageup: 0x21, pagedown: 0x22, left: 0x25, up: 0x26, right: 0x27, down: 0x28,
+  plus: 0xbb, minus: 0xbd, comma: 0xbc, period: 0xbe,
+};
+for (let i = 1; i <= 12; i++) VK['f' + i] = 0x6f + i;
+for (let i = 0; i < 26; i++) VK[String.fromCharCode(97 + i)] = 0x41 + i;
+for (let i = 0; i < 10; i++) VK[String(i)] = 0x30 + i;
+const MEDIA = { playpause: 0xb3, next: 0xb0, prev: 0xb1, previous: 0xb1, stop: 0xb2, volup: 0xaf, voldown: 0xae, mute: 0xad };
+const EXTENDED = new Set([0x25, 0x26, 0x27, 0x28, 0x2e, 0x24, 0x23, 0x21, 0x22, 0x5b]);
+
+/** Turns a text like "<ctrl>+<alt>+tab" or "ctrl+shift+s" into key codes; null if any key is unknown. */
+function parseCombo(text) {
+  const keys = String(text).split('+').map((t) => t.trim().replace(/^<|>$/g, '').toLowerCase()).filter(Boolean);
+  if (!keys.length || keys.length > 5) return null;
+  const vks = keys.map((k) => VK[k]);
+  return vks.every((v) => v) ? vks : null;
+}
+
+function kbd(vk, down) {
+  const flags = (down ? 0 : KEYEVENTF_KEYUP) | (EXTENDED.has(vk) ? KEYEVENTF_EXTENDEDKEY : 0);
+  return { type: 1, u: { ki: { wVk: vk, wScan: 0, dwFlags: flags, time: 0, dwExtraInfo: MAGIC } } };
+}
+function wheelInput(delta) {
+  return { type: 0, u: { mi: { dx: 0, dy: 0, mouseData: delta >>> 0, dwFlags: MOUSEEVENTF.WHEEL, time: 0, dwExtraInfo: MAGIC } } };
+}
 
 function sendMouse(flags, data = 0, dx = 0, dy = 0) {
   return SendInput(1, [{ type: 0, u: { mi: { dx, dy, mouseData: data >>> 0, dwFlags: flags, time: 0, dwExtraInfo: MAGIC } } }], SIZE);
@@ -43,6 +73,7 @@ function sendMouse(flags, data = 0, dx = 0, dy = 0) {
 class Input {
   constructor() {
     this.buttons = new Set();   // mouse buttons that we pressed ourselves
+    this.keysDown = new Set();  // keyboard keys that we pressed ourselves (always released)
     this.screen = null;         // rectangle (in physical pixels) of the target screen
     this.lastPos = null;        // where we last put the cursor
     this.suspendUntil = 0;      // if the user uses the physical mouse, we stop until this instant
@@ -135,6 +166,37 @@ class Input {
 
   releaseAll() {
     for (const b of [...this.buttons]) this.button(b, false);
+    for (const vk of [...this.keysDown].reverse()) { SendInput(1, [kbd(vk, false)], SIZE); this.keysDown.delete(vk); }
+  }
+
+  /** Presses a key combination (e.g. ctrl, shift, s) and ALWAYS releases it, even if something goes wrong. */
+  chord(vks) {
+    if (!vks || !vks.length) return false;
+    try {
+      for (const vk of vks) { SendInput(1, [kbd(vk, true)], SIZE); this.keysDown.add(vk); }
+    } finally {
+      for (const vk of [...vks].reverse()) { SendInput(1, [kbd(vk, false)], SIZE); this.keysDown.delete(vk); }
+    }
+    return true;
+  }
+
+  /** Ctrl + mouse wheel at the cursor: zoom in most apps. One batch, so Ctrl is never left pressed. */
+  zoom(direction, notches = 1) {
+    this.keysDown.add(VK.ctrl);
+    try {
+      SendInput(3, [kbd(VK.ctrl, true), wheelInput((direction > 0 ? 120 : -120) * notches), kbd(VK.ctrl, false)], SIZE);
+    } finally {
+      this.keysDown.delete(VK.ctrl);
+    }
+    return true;
+  }
+
+  /** Media keys: play/pause, next, previous, volume. */
+  media(name) {
+    const vk = MEDIA[String(name).toLowerCase()];
+    if (!vk) return false;
+    SendInput(2, [kbd(vk, true), kbd(vk, false)], SIZE);
+    return true;
   }
 
   /** Keyboard key (only used by tests to try the global shortcuts). */
@@ -143,4 +205,4 @@ class Input {
   }
 }
 
-module.exports = { Input, MOUSEEVENTF };
+module.exports = { Input, MOUSEEVENTF, parseCombo, VK, MEDIA };

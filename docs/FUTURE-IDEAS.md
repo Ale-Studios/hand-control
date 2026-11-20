@@ -1,4 +1,6 @@
-# Ideas for after the MVP (not implemented)
+# Ideas for after the MVP
+
+**Status (v0.1.x):** done since this list was written: the **launcher** with big tiles (it includes an on-screen-keyboard tile), **action gestures** with a simple text format (`keys:`, `zoom:`, `media:`, `open:`), the **palm** as pointing point, **two-hand mode** and a **test mode** (dry run). Ideas from the open-source project `handcursor` that we did NOT take yet: spanning all monitors with one hand movement and camera rotation.
 
 Proposals in order of value/simplicity. None has been started: to be decided together.
 

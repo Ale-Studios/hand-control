@@ -37,6 +37,7 @@
     } else if (s.mode === 'paused') {
       txt = 'PAUSED'; sub = s.hand ? 'open hand held still = activate' : 'hand not seen';
     } else { txt = 'LOCKED'; sub = 'unlock with Ctrl+Alt+K'; }
+    if (s.dry && s.mode === 'active') { txt = 'TEST MODE'; sub = 'nothing is sent to Windows'; }
     if (s.holdKind === 'toggle' && s.holdProgress > 0.05) sub = s.mode === 'active' ? 'hold still… pause' : 'hold still… activate';
     if (s.holdKind === 'lock' && s.holdProgress > 0.05) { sub = 'fist… LOCK'; }
     document.documentElement.style.setProperty('--c', C[key]);

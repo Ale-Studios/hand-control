@@ -7,9 +7,10 @@ const path = require('path');
 const fs = require('fs');
 const { EventEmitter } = require('events');
 const { performance } = require('perf_hooks');
-const { DEFAULTS, DISTANCE_PRESETS, merge, enforceMinArea } = require('../core/defaults.cjs');
+const { DEFAULTS, DISTANCE_PRESETS, ACTION_PRESETS, merge, enforceMinArea } = require('../core/defaults.cjs');
 const { pngFor } = require('./icons.cjs');
 const { Input } = require('./input.cjs');
+const { Actions, parseAction } = require('./actions.cjs');
 
 const argv = process.argv.slice(1);
 const flag = (n) => argv.includes(n);
@@ -82,6 +83,14 @@ function saveSettings() {
 
 // ─────────────────────────── state ───────────────────────────
 const input = new Input();
+const actions = new Actions({
+  input,
+  getSettings: () => settings,
+  log: (t) => addLog(t),
+  isDry: () => !!settings.safety.dryRun,
+  isLocked: () => mode === 'locked',
+  emit: (...a) => api.emit(...a),
+});
 let mode = 'paused';        // paused | active | locked
 let cameraState = 'off';    // off | on | error
 let handSeen = false;
@@ -93,6 +102,15 @@ let lastHudAt = 0;
 let blockedRequests = 0;
 let killKeyOk = false, pauseKeyOk = false, killKeyUsed = '';
 const logLines = [];
+
+// Test mode ("dry run"): tell what would happen instead of doing it. Moves and scroll are summarised, not listed.
+let dryMoves = 0, dryWheelAt = 0;
+function dryNote(m) {
+  if (m.type === 'move') { if (++dryMoves % 60 === 1) addLog('[test mode] the cursor would be moving'); return true; }
+  if (m.type === 'wheel') { if (Date.now() - dryWheelAt > 800) { dryWheelAt = Date.now(); addLog(`[test mode] would scroll ${m.delta > 0 ? 'up' : 'down'}`); } return true; }
+  addLog(`[test mode] would ${m.type === 'down' ? 'press' : m.type === 'up' ? 'release' : 'click'} the ${m.button || 'left'} button`);
+  return true;
+}
 
 function addLog(text) {
   const line = { t: Date.now(), text };
@@ -109,7 +127,7 @@ function sendOverlay() {
   if (overlay && !overlay.isDestroyed()) overlay.webContents.send('overlay-state', overlayState());
 }
 function overlayState() {
-  return { mode, camera: cameraState, hand: handSeen, holdKind: hud.holdKind, holdProgress: hud.holdProgress, pose: hud.pose };
+  return { mode, camera: cameraState, hand: handSeen, holdKind: hud.holdKind, holdProgress: hud.holdProgress, pose: hud.pose, dry: !!settings.safety.dryRun };
 }
 
 // ─────────────────────────── screen ───────────────────────────
@@ -142,7 +160,7 @@ function setMode(next, reason, source = 'ui') {
     if (next === 'active') next = 'paused';
   }
   mode = next;
-  if (mode !== 'active') input.releaseAll();
+  if (mode !== 'active') { input.releaseAll(); actions.closeLauncher(); }
   addLog(`Mode: ${label(mode)} — ${reason || source}`);
   send('mode', { mode, reason, source });
   refreshTray();
@@ -293,7 +311,7 @@ function wireIpc() {
     if (!fromMain(e)) return null;
     const s = applyScreen();
     return {
-      settings, defaults: DEFAULTS, mode, presets: DISTANCE_PRESETS, screen: { w: s.w, h: s.h },
+      settings, defaults: DEFAULTS, mode, presets: DISTANCE_PRESETS, actionPresets: ACTION_PRESETS, screen: { w: s.w, h: s.h },
       hotkeys: hotkeyInfo(), log: logLines, blocked: blockedRequests,
       info: { glass: glassMode(), delegate: DELEGATE, version: app.getVersion(), e2e: E2E, bench: BENCH, userData: app.getPath('userData'), displays: screen.getAllDisplays().length },
     };
@@ -303,6 +321,11 @@ function wireIpc() {
     if (!fromMain(e)) return null;
     const before = settings;
     settings = merge(settings, patch);
+    // actions typed into the settings must be valid; a bad one is put back to the previous value
+    for (const k of ['ringPinch', 'pinkyPinch']) {
+      if (parseAction(settings.actions[k]).error) { addLog(`Invalid action for ${k}: kept the previous one`); settings.actions[k] = before.actions[k]; }
+    }
+    if (settings.safety.dryRun !== before.safety.dryRun) { addLog(settings.safety.dryRun ? 'TEST MODE ON: nothing will be sent to the mouse or keyboard' : 'Test mode off'); sendOverlay(); }
     saveSettings();
     input.realMouseWins = settings.safety.realMouseWins;
     if (settings.safety.killKey !== before.safety.killKey || settings.safety.pauseKey !== before.safety.pauseKey) registerHotkeys();
@@ -322,19 +345,24 @@ function wireIpc() {
     if (!fromMain(e) || !m) return;
     lastInputAt = Date.now();
     const active = mode === 'active';
+    const dry = !!settings.safety.dryRun; // test mode: say what would happen, touch nothing
     let done = false;
     switch (m.type) {
-      case 'move': if (active) done = input.moveNorm(+m.x, +m.y); break;
-      case 'down': if (active) done = input.button(m.button === 'right' ? 'right' : 'left', true); break;
-      case 'up': input.button(m.button === 'right' ? 'right' : 'left', false); done = true; break;
-      case 'click': if (active) done = input.click(m.button === 'right' ? 'right' : 'left'); break;
-      case 'wheel': if (active) done = input.wheel(+m.delta || 0); break;
+      case 'move': if (active) done = dry ? dryNote(m) : input.moveNorm(+m.x, +m.y); break;
+      case 'down': if (active) done = dry ? dryNote(m) : input.button(m.button === 'right' ? 'right' : 'left', true); break;
+      case 'up': if (!dry) input.button(m.button === 'right' ? 'right' : 'left', false); else dryNote(m); done = true; break;
+      case 'click': if (active) done = dry ? dryNote(m) : input.click(m.button === 'right' ? 'right' : 'left'); break;
+      case 'wheel': if (active) done = dry ? dryNote(m) : input.wheel(+m.delta || 0); break;
+      case 'action': if (active && (m.which === 'ring' || m.which === 'pinky')) done = actions.runGesture(m.which); break;
       default: return;
     }
     const tMain = nowMs();
     api.emit('input', m, done, tMain);
     if (m.ack) e.sender.send('ack', { seq: m.ack, tMain, type: m.type, done });
   });
+
+  // a launcher tile was clicked (inside the launcher window; the action itself comes from the saved settings)
+  ipcMain.on('launcher:choose', (e, i) => actions.chooseTile(i, e.sender));
 
   ipcMain.on('camera:state', (e, s) => {
     if (!fromMain(e)) return;
@@ -430,7 +458,7 @@ if (!gotLock) {
     addLog('Hand Control started — PAUSED. Hold an open hand still to activate.');
     Object.defineProperty(api, 'mode', { get: () => mode, enumerable: true });
     Object.assign(api, {
-      setMode, input, settings: () => settings, setSettings: (p) => { settings = merge(settings, p); send('settings', settings); },
+      setMode, input, actions, settings: () => settings, setSettings: (p) => { settings = merge(settings, p); send('settings', settings); },
       win: () => win, overlay: () => overlay, send, hotkeys: hotkeyInfo, blocked: () => blockedRequests,
       nowMs, userData: () => app.getPath('userData'), cameraState: () => cameraState, handSeen: () => handSeen,
     });

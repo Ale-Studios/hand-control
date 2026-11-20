@@ -49,6 +49,8 @@ const POSES = {
   pinchOpenHand: { f: ['halfPinch', 'straight', 'straight', 'straight'], thumb: 'index' },
   rclick: { f: ['straight', 'halfPinch', 'curled', 'curled'], thumb: 'middle' },
   scroll: { f: ['straight', 'straight', 'curled', 'curled'], thumb: 'tuck' },
+  ringpinch: { f: ['straight', 'straight', 'halfPinch', 'curled'], thumb: 'ring' },
+  pinkypinch: { f: ['straight', 'straight', 'curled', 'halfPinch'], thumb: 'pinky' },
 };
 
 /**
@@ -85,13 +87,19 @@ export function makeHand({ pose = 'point', at = { x: 0.5, y: 0.5 }, size = 0.12,
     const t = near(tips.middle, -0.006);
     setThumb({ x: 0.025, y: -0.02, z: 0 }, { x: 0.035, y: -0.04, z: -0.01 },
       { x: (0.035 + t.x) / 2, y: (-0.04 + t.y) / 2, z: -0.02 }, t);
+  } else if (P.thumb === 'ring' || P.thumb === 'pinky') {
+    const t = near(tips[P.thumb], -0.004);
+    setThumb({ x: 0.025, y: -0.02, z: 0 }, { x: 0.02, y: -0.04, z: -0.015 },
+      { x: (0.02 + t.x) / 2, y: (-0.04 + t.y) / 2, z: -0.03 }, t);
   } else {
     setThumb(...T[P.thumb].map(([x, y, z]) => ({ x, y, z })));
   }
 
   // image: same drawing, scaled and translated (z ignored in the projection)
   const sc = size / HS;               // metres → fraction of the height
-  const knuckle = { x: (w[5].x + w[6].x) / 2, y: (w[5].y + w[6].y) / 2 };
+  // the placement reference does not depend on the pose (the base of the index and where its middle joint is when straight),
+  // so changing pose really moves the fingertips relative to the palm, as on a real hand
+  const knuckle = { x: MCP.index[0], y: MCP.index[1] - SEG.index[0] / 2 };
   const lm = w.map((p) => ({
     x: at.x + ((p.x - knuckle.x) * sc) / aspect,
     y: at.y + (p.y - knuckle.y) * sc,

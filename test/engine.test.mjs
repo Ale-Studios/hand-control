@@ -1,4 +1,4 @@
-﻿import test from 'node:test';
+import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import { GestureEngine } from '../src/core/engine.mjs';
@@ -247,4 +247,126 @@ test('chosen hand: with "right" the left one is ignored', () => {
   const left = makeHand({ pose: 'point', at: CENTER, label: 'left' });
   for (let t = 0; t < 800; t += 33) eng.update({ t, hands: [left] });
   assert.equal(events.length, 0);
+});
+
+// ───────────── pointer anchor, action gestures, two-hand mode ─────────────
+function runHands(eng, t0, ms, fn, fps = 30) {
+  const dt = 1000 / fps;
+  let t = t0;
+  for (; t < t0 + ms; t += dt) eng.update({ t, hands: fn(t - t0) });
+  return t;
+}
+
+test('palm anchor stays put when the fingers move (more than the knuckle, much more than the tip)', () => {
+  const shift = (pointAt) => {
+    const { eng } = setup({ control: { pointAt } });
+    eng.setMode('active');
+    eng.update(frame(0, makeHand({ pose: 'point', at: CENTER })));
+    const a = eng.hud.anchor;
+    eng.update(frame(33, makeHand({ pose: 'pinch', at: CENTER })));
+    const b = eng.hud.anchor;
+    return Math.hypot((a.u - b.u) * 1280, (a.v - b.v) * 720);
+  };
+  const palm = shift('palm'), knuckle = shift('knuckle'), tip = shift('tip');
+  assert.ok(palm < knuckle && knuckle < tip, `shift in pixels: palm ${palm.toFixed(1)} < knuckle ${knuckle.toFixed(1)} < tip ${tip.toFixed(1)}`);
+});
+
+test('ring pinch held = action "ring", once; pinky pinch = action "pinky"; the cursor does not move', () => {
+  const { eng, events } = setup();
+  eng.setMode('active');
+  let t = run(eng, 0, 800, () => makeHand({ pose: 'point', at: CENTER }));
+  events.length = 0;
+  t = run(eng, t, 300, () => makeHand({ pose: 'ringpinch', at: CENTER }));
+  assert.equal(events.filter((e) => e.type === 'action').length, 0, 'too short: no action yet');
+  t = run(eng, t, 1200, () => makeHand({ pose: 'ringpinch', at: CENTER }));
+  assert.deepEqual(events.filter((e) => e.type === 'action').map((e) => e.which), ['ring'], 'fires once however long it is held');
+  const mv = events.filter((e) => e.type === 'move');
+  assert.ok(mv.every((e) => Math.abs(e.x - mv[0].x) < 0.002 && Math.abs(e.y - mv[0].y) < 0.002), 'the cursor stays where it was during the gesture');
+  t = run(eng, t, 300, () => makeHand({ pose: 'point', at: CENTER }));
+  t = run(eng, t, 900, () => makeHand({ pose: 'pinkypinch', at: CENTER }));
+  assert.deepEqual(events.filter((e) => e.type === 'action').map((e) => e.which), ['ring', 'pinky']);
+});
+
+test('action gestures do nothing while PAUSED', () => {
+  const { eng, events } = setup();
+  run(eng, 0, 2000, () => makeHand({ pose: 'ringpinch', at: CENTER }));
+  assert.equal(events.filter((e) => e.type === 'action').length, 0);
+});
+
+test('two-hand mode: the other hand clicks while the steering hand keeps moving', () => {
+  const { eng, events } = setup({ control: { twoHands: true, cursorHand: 'right' } });
+  eng.setMode('active');
+  const R = (ms, pose = 'point') => makeHand({ pose, at: { x: 0.35 + ms * 0.00005, y: 0.5 }, label: 'right' });
+  const Lh = (pose) => makeHand({ pose, at: { x: 0.7, y: 0.5 }, label: 'left' });
+  let t = runHands(eng, 0, 800, (ms) => [R(ms), Lh('point')]);
+  events.length = 0;
+  t = runHands(eng, t, 200, (ms) => [R(800 + ms), Lh('pinch')]);   // quick pinch of the OTHER hand
+  t = runHands(eng, t, 200, (ms) => [R(1000 + ms), Lh('point')]);
+  assert.deepEqual(types(events.filter((e) => e.type !== 'move')), ['down:left', 'up:left'], 'a click from the helper hand');
+  assert.ok(events.filter((e) => e.type === 'move').length > 8, 'the cursor kept being steered meanwhile');
+});
+
+test('two-hand mode: helper pinch held while steering = drag; helper V = scroll; helper thumb+middle = right click', () => {
+  const { eng, events } = setup({ control: { twoHands: true, cursorHand: 'right' } });
+  eng.setMode('active');
+  const R = (ms) => makeHand({ pose: 'point', at: { x: 0.3 + ms * 0.0001, y: 0.5 }, label: 'right' });
+  const Lh = (pose, y = 0.5) => makeHand({ pose, at: { x: 0.75, y }, label: 'left' });
+  let t = runHands(eng, 0, 800, (ms) => [R(ms), Lh('point')]);
+  events.length = 0;
+  t = runHands(eng, t, 900, (ms) => [R(800 + ms), Lh('pinch')]);
+  assert.ok(events.some((e) => e.type === 'down') && !events.some((e) => e.type === 'up'), 'button held by the helper hand');
+  const moves = events.filter((e) => e.type === 'move');
+  assert.ok(moves[moves.length - 1].x < moves[1].x - 0.02, 'steering moved the cursor while it was held (drag; mirrored)');
+  t = runHands(eng, t, 200, (ms) => [R(1700 + ms), Lh('point')]);
+  assert.equal(events.filter((e) => e.type === 'up').length, 1, 'released when the helper opens');
+  events.length = 0;
+  t = runHands(eng, t, 400, () => [R(1900), Lh('scroll', 0.6)]);
+  t = runHands(eng, t, 500, (ms) => [R(1900), Lh('scroll', 0.6 - ms * 0.0003)]);
+  assert.ok(events.filter((e) => e.type === 'wheel').length > 0, 'helper scrolls');
+  events.length = 0;
+  t = runHands(eng, t, 600, () => [R(1900), Lh('rclick')]);
+  assert.deepEqual(types(events.filter((e) => e.type === 'click')), ['click:right']);
+});
+
+test('two-hand mode: a fist or an open hand on the helper hand does nothing', () => {
+  const { eng } = setup({ control: { twoHands: true, cursorHand: 'right' } });
+  eng.setMode('active');
+  const R = makeHand({ pose: 'point', at: { x: 0.35, y: 0.5 }, label: 'right' });
+  runHands(eng, 0, 2500, () => [R, makeHand({ pose: 'fist', at: { x: 0.75, y: 0.5 }, label: 'left' })]);
+  assert.equal(eng.mode, 'active', 'no lock from the helper fist');
+});
+
+test('two-hand mode: if the helper hand disappears while holding the button, it is released', () => {
+  const { eng, events } = setup({ control: { twoHands: true, cursorHand: 'right' } });
+  eng.setMode('active');
+  const R = makeHand({ pose: 'point', at: { x: 0.35, y: 0.5 }, label: 'right' });
+  let t = runHands(eng, 0, 800, () => [R, makeHand({ pose: 'point', at: { x: 0.75, y: 0.5 }, label: 'left' })]);
+  t = runHands(eng, t, 500, () => [R, makeHand({ pose: 'pinch', at: { x: 0.75, y: 0.5 }, label: 'left' })]);
+  events.length = 0;
+  t = runHands(eng, t, 600, () => [R]);
+  assert.equal(events.filter((e) => e.type === 'up').length, 1);
+});
+
+test('single-hand mode ignores the second hand', () => {
+  const { eng, events } = setup();
+  eng.setMode('active');
+  const R = makeHand({ pose: 'point', at: { x: 0.35, y: 0.5 }, label: 'right', size: 0.2 });
+  runHands(eng, 0, 800, () => [R, makeHand({ pose: 'pinch', at: { x: 0.75, y: 0.5 }, label: 'left', size: 0.1 })]);
+  assert.ok(!events.some((e) => e.type === 'down'), 'the smaller hand is not used');
+});
+test('after a click the cursor stays where it clicked for a moment (so a double click works), then follows the hand again', () => {
+  const { eng, events } = setup();
+  eng.setMode('active');
+  let t = run(eng, 0, 800, () => makeHand({ pose: 'point', at: CENTER }));
+  t = run(eng, t, 200, () => makeHand({ pose: 'pinch', at: CENTER }));
+  const clickAt = [...events].reverse().find((e) => e.type === 'move');
+  events.length = 0;
+  // the fingers reopen and the pointing point shifts a few pixels (here ~8 px on the screen)
+  t = run(eng, t, 300, () => makeHand({ pose: 'point', at: { x: 0.5 + 0.004, y: 0.5 + 0.006 } }));
+  const stuck = events.filter((e) => e.type === 'move');
+  assert.ok(stuck.length > 3 && stuck.every((e) => Math.abs(e.x - clickAt.x) * 1920 < 1 && Math.abs(e.y - clickAt.y) * 1080 < 1), 'cursor held at the click position');
+  events.length = 0;
+  t = run(eng, t, 900, () => makeHand({ pose: 'point', at: { x: 0.5 + 0.004, y: 0.5 + 0.006 } }));
+  const last = [...events].reverse().find((e) => e.type === 'move');
+  assert.ok(Math.abs(last.y - clickAt.y) * 1080 > 3, 'after the short window it follows the hand again');
 });

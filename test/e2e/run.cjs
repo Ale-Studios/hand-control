@@ -48,7 +48,9 @@ setTimeout(() => { console.error('Test TIMEOUT: exiting'); try { require('../../
       const {ipcRenderer}=require('electron'); const T=()=>performance.timeOrigin+performance.now();
       for (const type of ['mousemove','mousedown','mouseup','click','dblclick','contextmenu','wheel','keydown']) addEventListener(type, e => {
         if (type==='contextmenu') e.preventDefault();
-        ipcRenderer.send('tevt',{type,x:e.clientX,y:e.clientY,b:e.button,bs:e.buttons,dy:e.deltaY,key:e.key,t:T()});
+        if (type==='wheel' && e.ctrlKey) e.preventDefault();
+        if (type==='keydown') e.preventDefault();
+        ipcRenderer.send('tevt',{type,x:e.clientX,y:e.clientY,b:e.button,bs:e.buttons,dy:e.deltaY,key:e.key,ck:e.ctrlKey,sk:e.shiftKey,ak:e.altKey,t:T()});
       },{capture:true,passive:false});
     </script></body>`;
   const events = [];
@@ -72,7 +74,7 @@ setTimeout(() => { console.error('Test TIMEOUT: exiting'); try { require('../../
     const start = performance.now();
     for (let i = 0; i < n; i++) {
       const hand = fn((i * FRAME_MS));
-      api.send('e2e:frame', { t: vt, hands: hand ? [hand] : [], tSend: api.nowMs() });
+      api.send('e2e:frame', { t: vt, hands: Array.isArray(hand) ? hand : hand ? [hand] : [], tSend: api.nowMs() });
       vt += FRAME_MS;
       // drift-free pacing: aim at the theoretical instant of the next frame (like a 30 fps camera)
       const wait = start + (i + 1) * FRAME_MS - performance.now();
@@ -177,7 +179,8 @@ setTimeout(() => { console.error('Test TIMEOUT: exiting'); try { require('../../
     ev = since(m0);
     const t1 = ev.find((e) => e.type === 'mousedown');
     const dd = ev.filter((e) => e.type === 'mousedown').map((e) => `${(e.t - t1.t).toFixed(0)}ms@${e.x},${e.y}`).join(' ');
-    check('two quick pinches = double click', ev.some((e) => e.type === 'dblclick'), `${dd} — Windows: ${JSON.stringify(input.doubleClickInfo())}`);
+    const seq = ev.filter((e) => e.type !== 'wheel').map((e) => `${e.type}${e.type === 'mousemove' ? '' : ''}@${e.x},${e.y}+${(e.t - t1.t).toFixed(0)}`).join(' ');
+    check('two quick pinches = double click', ev.some((e) => e.type === 'dblclick'), `${dd} — Windows: ${JSON.stringify(input.doubleClickInfo())} — events: ${seq}`);
   }
 
   if (ALL) {
@@ -267,6 +270,84 @@ setTimeout(() => { console.error('Test TIMEOUT: exiting'); try { require('../../
   check('hand not seen for 3 s = automatic PAUSE', await waitMode('paused', 1500));
   api.setSettings({ safety: { autoPauseSec: 20 } });
 
+  }
+  if (want('actions') || ALL) {
+  // 12b) actions: keys, zoom, launcher (with a real click on a tile), two-hand mode, test mode
+  const CTRL = 0x11, SHIFT = 0x10;
+  await ensureActive();
+  // keyboard shortcuts go to the window in the foreground: give the focus to the test window (a harmless chord, in case it lands elsewhere)
+  target.show(); target.focus(); await sleep(400);
+  api.setSettings({ actions: { ringPinch: 'keys:<ctrl>+<shift>+<f12>', pinkyPinch: 'zoom:in', holdMs: 500 } });
+  await sleep(200);
+
+  m0 = mark();
+  await drive(1300, () => hand('ringpinch', 0.5, 0.5));
+  await drive(300, () => hand('point', 0.5, 0.5)); await sleep(150);
+  ev = since(m0);
+  const kd = ev.find((e) => e.type === 'keydown' && e.key === 'F12');
+  check('thumb + ring finger held = the bound keyboard shortcut (Ctrl+Shift+F12)', !!kd && kd.ck && kd.sk, kd ? 'key=' + kd.key + ' ctrl=' + kd.ck + ' shift=' + kd.sk : 'no keydown seen');
+  check('…and the keys are released afterwards (real Windows state)', !input.isDown(CTRL) && !input.isDown(SHIFT) && input.keysDown.size === 0);
+  check('the action fires once however long the gesture is held', ev.filter((e) => e.type === 'keydown' && e.key === 'F12').length === 1);
+
+  m0 = mark();
+  await drive(1300, () => hand('pinkypinch', 0.5, 0.5));
+  await drive(300, () => hand('point', 0.5, 0.5)); await sleep(150);
+  const zw = since(m0).find((e) => e.type === 'wheel');
+  check('thumb + little finger held = zoom in (Ctrl + wheel)', !!zw && zw.ck && zw.dy < 0, zw ? 'ctrl=' + zw.ck + ' deltaY=' + zw.dy : 'no wheel seen');
+  check('…Ctrl is released afterwards', !input.isDown(CTRL));
+
+  // launcher: open with the gesture, point at a tile, pinch on it
+  api.setSettings({ actions: { ringPinch: 'launcher' } });
+  await sleep(200);
+  await drive(1300, () => hand('ringpinch', 0.5, 0.5));
+  await drive(300, () => hand('point', 0.5, 0.5)); await sleep(300);
+  const lb = api.actions.bounds();
+  check('thumb + ring finger held = the launcher opens', api.actions.launcherOpen() && !!lb, lb ? 'window ' + lb.width + 'x' + lb.height + ' at ' + lb.x + ',' + lb.y : 'closed');
+  if (lb) {
+    const { LAYOUT } = require('../../src/main/actions.cjs');
+    const idx = 6; // "Zoom in"
+    const dip = { x: lb.x + LAYOUT.gap + (idx % LAYOUT.cols) * (LAYOUT.tileW + LAYOUT.gap) + LAYOUT.tileW / 2, y: lb.y + LAYOUT.gap + Math.floor(idx / LAYOUT.cols) * (LAYOUT.tileH + LAYOUT.gap) + LAYOUT.tileH / 2 };
+    const pt = screen.dipToScreenPoint(dip);
+    const sx = pt.x / (input.screen.w - 1), sy = pt.y / (input.screen.h - 1);
+    m0 = mark();
+    await drive(1100, () => hand('point', sx, sy)); await sleep(100);
+    check('the cursor can be steered onto a tile', near(cursor(), pt, 8), 'cursor ' + cursor().x + ',' + cursor().y + ' tile ' + Math.round(pt.x) + ',' + Math.round(pt.y));
+    await drive(300, () => hand('pinch', sx, sy));
+    await drive(500, () => hand('point', sx, sy)); await sleep(600);
+    const tz = since(m0).find((e) => e.type === 'wheel' && e.ck);
+    check('pinching on a tile runs its action and closes the launcher', !api.actions.launcherOpen() && !!tz, tz ? 'Ctrl+wheel deltaY=' + tz.dy : 'no zoom seen');
+  }
+
+  // two-hand mode: the other hand clicks while the steering hand keeps moving
+  api.setSettings({ control: { twoHands: true, cursorHand: 'right' } });
+  await sleep(200);
+  const R = (ms, pose = 'point') => makeHand({ pose, at: at(0.3 + 0.0002 * ms, 0.5), label: 'right' });
+  const Lh = (pose) => makeHand({ pose, at: { x: 0.2, y: 0.5 }, label: 'left' });
+  await drive(800, (ms) => [R(ms), Lh('point')]);
+  m0 = mark();
+  await drive(250, (ms) => [R(800 + ms), Lh('pinch')]);
+  await drive(500, (ms) => [R(1050 + ms), Lh('point')]); await sleep(100);
+  ev = since(m0);
+  check('two-hand mode: a pinch of the OTHER hand clicks', ev.some((e) => e.type === 'mousedown') && ev.some((e) => e.type === 'mouseup') && ev.some((e) => e.type === 'click'), ev.filter((e) => e.type !== 'mousemove').map((e) => e.type).join(','));
+  check('…while the steering hand keeps moving the cursor', ev.filter((e) => e.type === 'mousemove').length > 5);
+  api.setSettings({ control: { twoHands: false } });
+  await sleep(200);
+
+  // test mode: nothing may reach Windows
+  api.setSettings({ safety: { dryRun: true } });
+  await sleep(200);
+  await drive(700, () => hand('point', 0.5, 0.5));
+  const cT = cursor(); m0 = mark();
+  await drive(1200, (ms) => hand('point', 0.2 + 0.5 * (ms / 1200), 0.4));
+  await drive(250, () => hand('pinch', 0.7, 0.4));
+  await drive(400, () => hand('point', 0.7, 0.4));
+  await drive(1300, () => hand('ringpinch', 0.7, 0.4));
+  await sleep(150);
+  ev = since(m0);
+  check('test mode: the cursor does not move, nothing is clicked, no key is pressed', near(cursor(), cT, 2) && !ev.some((e) => e.type === 'mousedown' || e.type === 'keydown' || e.type === 'wheel') && !api.actions.launcherOpen(), 'cursor ' + cT.x + ',' + cT.y + ' → ' + cursor().x + ',' + cursor().y);
+  api.setSettings({ safety: { dryRun: false } });
+  await sleep(200);
+  api.actions.closeLauncher();
   }
   if (want('net') || ALL) {
   // 13) no network

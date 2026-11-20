@@ -12,6 +12,7 @@ const $ = (id) => document.getElementById(id);
 let S = null;            // current settings
 let DEFAULTS = null;
 let PRESETS = {};
+let ACTION_PRESETS = [];
 let mode = 'paused';
 let screenSize = { w: 1920, h: 1080 };
 let info = {};
@@ -23,7 +24,7 @@ let engine = null;
 let tracker = null;
 
 const POSE_EN = {
-  none: 'No hand', point: 'Pointing', pinch: 'Click (pinch)', rclick: 'Right click',
+  none: 'No hand', point: 'Pointing', pinch: 'Click (pinch)', rclick: 'Right click', ringpinch: 'Action 1 (ring)', pinkypinch: 'Action 2 (pinky)',
   scroll: 'Scrolling', open: 'Open hand', fist: 'Fist', other: '—',
 };
 const HAND_CONNECTIONS = [[0,1],[1,2],[2,3],[3,4],[0,5],[5,6],[6,7],[7,8],[5,9],[9,10],[10,11],[11,12],[9,13],[13,14],[14,15],[15,16],[13,17],[17,18],[18,19],[19,20],[0,17]];
@@ -66,7 +67,7 @@ function refreshStatus() {
   if (!cameraOn) { key = mode === 'locked' ? 'locked' : 'off'; text = mode === 'locked' ? 'LOCKED' : 'CAMERA OFF'; }
   else if (mode === 'locked') text = 'LOCKED';
   else if (mode === 'paused') text = 'PAUSED';
-  else if (lastHud && lastHud.handVisible) text = 'ACTIVE';
+  else if (lastHud && lastHud.handVisible) text = S.safety.dryRun ? 'ACTIVE · TEST MODE' : 'ACTIVE';
   else { key = 'nohand'; text = 'ACTIVE — NO HAND SEEN'; }
   chip.className = 'chip ' + key;
   $('statusText').textContent = text;
@@ -169,6 +170,7 @@ function onEngineEvent(e) {
   if (e.type === 'move') { m.x = e.x; m.y = e.y; }
   else if (e.type === 'down' || e.type === 'up' || e.type === 'click') m.button = e.button;
   else if (e.type === 'wheel') m.delta = e.delta;
+  else if (e.type === 'action') m.which = e.which;
   if (e.meta) m.meta = { tSend: e.meta.tSend, tCap: e.meta.tCapEpoch };
   if (e.type === 'move' && (++stat.seq % 5 === 0)) {
     m.ack = stat.seq;
@@ -217,7 +219,7 @@ function draw(frame, hud) {
   let W = video.videoWidth, H = video.videoHeight;
   if (!W) { if (!info.e2e) return; W = 1280; H = 720; } // tests draw on an empty canvas
   if (ov.width !== W || ov.height !== H) { ov.width = W; ov.height = H; }
-  hudr.draw(octx, W, H, { frame, hud, S, mode, screen: screenSize, poseName: hud ? POSE_EN[hud.pose] : '', px: W / Math.max(1, ov.clientWidth) });
+  hudr.draw(octx, W, H, { frame, hud, S, mode, screen: screenSize, poseName: hud ? POSE_EN[hud.pose] : '', helperPoseName: hud && hud.helperPose ? POSE_EN[hud.helperPose] || hud.helperPose : '', px: W / Math.max(1, ov.clientWidth) });
 }
 
 // ───────────────────────── camera ─────────────────────────
@@ -285,13 +287,19 @@ const SCHEMA = () => [
   { id: 'control.area.h', type: 'range', min: 0.28, max: 1, step: 0.01, label: 'Active area — height', fmt: (v) => Math.round(v * 100) + '%' },
   { id: 'control.area.cx', type: 'range', min: 0.1, max: 0.9, step: 0.01, label: 'Active area — horizontal position', fmt: (v) => Math.round(v * 100) + '%' },
   { id: 'control.area.cy', type: 'range', min: 0.1, max: 0.9, step: 0.01, label: 'Active area — vertical position', fmt: (v) => Math.round(v * 100) + '%' },
-  { id: 'control.pointAt', type: 'select', label: 'Point that moves the cursor', options: [['knuckle', 'Index knuckle (steadier)'], ['tip', 'Index fingertip']] },
-  { id: 'control.hand', type: 'select', label: 'Controlling hand', restart: true, options: [['any', 'Any (the closest one)'], ['right', 'Right only'], ['left', 'Left only']] },
+  { id: 'control.pointAt', type: 'select', label: 'Point that moves the cursor', options: [['knuckle', 'Index knuckle (steady)'], ['palm', 'Centre of the palm (steadiest)'], ['tip', 'Index fingertip (most natural)']], help: 'The palm does not move when your fingers do, so clicks land where you aimed.' },
+  { id: 'control.twoHands', type: 'check', label: 'Two-hand mode: one hand steers, the other clicks, drags and scrolls', help: 'Lets you click without stopping the hand that points.' },
+  { id: 'control.cursorHand', type: 'select', label: 'Steering hand (two-hand mode)', options: [['right', 'Right'], ['left', 'Left']], help: 'If it picks the wrong hand with your camera, choose the other one.' },
+  { id: 'control.hand', type: 'select', label: 'Controlling hand (one-hand mode)', restart: true, options: [['any', 'Any (the closest one)'], ['right', 'Right only'], ['left', 'Left only']] },
   ...(info.displays > 1 ? [{ id: 'control.display', type: 'select', label: 'Screen to control', numeric: true, options: Array.from({ length: info.displays }, (_, i) => [i, 'Screen ' + (i + 1)]) }] : []),
   { g: 'Clicks' },
   { id: 'clicks.pinchSensitivity', type: 'range', min: 0.6, max: 1.8, step: 0.05, label: 'Pinch sensitivity', fmt: (v) => v.toFixed(2) + '×', help: 'Higher = a looser pinch is enough.' },
   { id: 'clicks.dragFreezeMs', type: 'range', min: 100, max: 700, step: 10, label: 'Cursor held still after a pinch', fmt: (v) => v + ' ms', help: 'More precise clicks; after this time, moving your hand drags.' },
   { id: 'clicks.confirmMs', type: 'range', min: 20, max: 160, step: 5, label: 'Minimum gesture duration', fmt: (v) => v + ' ms', help: 'Higher = fewer accidental clicks, but less responsive.' },
+  { g: 'Actions' },
+  { id: 'actions.ringPinch', type: 'select', label: 'Thumb + ring finger, held', options: ACTION_PRESETS, help: 'Keep the index finger up and touch thumb and ring finger for half a second.' },
+  { id: 'actions.pinkyPinch', type: 'select', label: 'Thumb + little finger, held', options: ACTION_PRESETS },
+  { id: 'actions.holdMs', type: 'range', min: 300, max: 1500, step: 50, label: 'Hold time for these gestures', fmt: (v) => v + ' ms', help: 'Longer = fewer actions by accident.' },
   { g: 'Scrolling' },
   { id: 'scroll.speed', type: 'range', min: 0.3, max: 3, step: 0.1, label: 'Speed', fmt: (v) => v.toFixed(1) + '×' },
   { id: 'scroll.natural', type: 'check', label: '"Natural" scrolling (hand up = content up)' },
@@ -301,6 +309,7 @@ const SCHEMA = () => [
   { id: 'safety.lockHoldMs', type: 'range', min: 500, max: 3000, step: 100, label: 'Fist time for the EMERGENCY LOCK', fmt: (v) => (v / 1000).toFixed(1) + ' s' },
   { id: 'safety.autoPauseSec', type: 'range', min: 0, max: 120, step: 5, label: 'Auto-pause when the hand is not seen', fmt: (v) => (v === 0 ? 'never' : v + ' s') },
   { id: 'safety.realMouseWins', type: 'check', label: 'If I move the physical mouse, hand control pauses for a moment' },
+  { id: 'safety.dryRun', type: 'check', label: 'Test mode: show what would happen, without touching the mouse or keyboard', help: 'Nothing is sent to Windows: the log tells what each gesture WOULD do.' },
 ];
 
 let formBuilt = false;
@@ -327,6 +336,7 @@ function buildForm() {
       else for (const [v, l] of f.options) { const o = document.createElement('option'); o.value = v; o.textContent = l; sel.appendChild(o); }
       wrap.innerHTML = `<label><span>${f.label}</span></label>`; wrap.appendChild(sel);
       if (f.help) { const h = document.createElement('div'); h.className = 'help'; h.textContent = f.help; wrap.appendChild(h); }
+      if (f.id.startsWith('actions.') && !f.options.some(([v]) => v === val)) { const o = document.createElement('option'); o.value = val; o.textContent = 'Custom: ' + val; sel.appendChild(o); }
       sel.value = val;
       sel.addEventListener('change', () => changeSetting(f, f.numeric ? +sel.value : sel.value));
       if (f.type === 'camera') cameraSelect = sel;
@@ -568,7 +578,7 @@ function wireE2E() {
 // ───────────────────────── startup ─────────────────────────
 async function init() {
   const st = await hc.getState();
-  S = st.settings; DEFAULTS = st.defaults; PRESETS = st.presets; mode = st.mode; screenSize = st.screen; info = st.info;
+  S = st.settings; DEFAULTS = st.defaults; PRESETS = st.presets; ACTION_PRESETS = st.actionPresets || []; mode = st.mode; screenSize = st.screen; info = st.info;
   $('ver').textContent = 'v' + info.version;
   engine = new GestureEngine(() => S, onEngineEvent);
   engine.setScreen(screenSize.w, screenSize.h);

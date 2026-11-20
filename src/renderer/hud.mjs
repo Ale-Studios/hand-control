@@ -106,41 +106,55 @@ export class HudRenderer {
 
     // ── hands ──
     (frame.hands || []).forEach((hand, i) => {
-      const main = handVisible && i === 0;
+      const steerIdx = hud && hud.steerIndex != null && hud.steerIndex >= 0 ? hud.steerIndex : 0;
+      const main = handVisible && i === steerIdx;                       // the steering hand
+      const helper = handVisible && !!hud && hud.helperIndex === i;     // two-hand mode: the other hand
+      const strong = main || helper;
       const pts = hand.lm.map((p) => ({ x: X(p.x), y: Y(p.y) }));
-      const aBone = main ? 0.95 : 0.35;
+      const aBone = strong ? 0.95 : 0.35;
 
       // translucent palm
       ctx.beginPath();
       PALM.forEach((idx, n) => (n ? ctx.lineTo(pts[idx].x, pts[idx].y) : ctx.moveTo(pts[idx].x, pts[idx].y)));
       ctx.closePath();
-      ctx.fillStyle = hexA(col.b, main ? 0.1 : 0.04);
+      ctx.fillStyle = hexA(col.b, strong ? 0.1 : 0.04);
       ctx.fill();
 
       // bones with a soft glow
-      ctx.shadowColor = col.b; ctx.shadowBlur = (main ? 10 : 4) * k;
-      ctx.strokeStyle = hexA(col.a, aBone); ctx.lineWidth = (main ? 1.4 : 1) * k;
+      ctx.shadowColor = col.b; ctx.shadowBlur = (strong ? 10 : 4) * k;
+      ctx.strokeStyle = hexA(col.a, aBone); ctx.lineWidth = (strong ? 1.4 : 1) * k;
       ctx.beginPath();
       for (const [p, q] of CONN) { ctx.moveTo(pts[p].x, pts[p].y); ctx.lineTo(pts[q].x, pts[q].y); }
       ctx.stroke();
 
       // joints (small) and fingertips (ringed)
       ctx.shadowBlur = 0;
-      ctx.fillStyle = hexA(col.a, main ? 0.9 : 0.4);
+      ctx.fillStyle = hexA(col.a, strong ? 0.9 : 0.4);
       pts.forEach((p, n) => {
         if (TIPS.includes(n)) return;
         ctx.beginPath(); ctx.arc(p.x, p.y, 1.7 * k, 0, Math.PI * 2); ctx.fill();
       });
       for (const n of TIPS) {
         const p = pts[n];
-        ctx.fillStyle = hexA(col.a, main ? 1 : 0.5);
+        ctx.fillStyle = hexA(col.a, strong ? 1 : 0.5);
         ctx.beginPath(); ctx.arc(p.x, p.y, 2.6 * k, 0, Math.PI * 2); ctx.fill();
-        if (main) {
+        if (strong) {
           ctx.strokeStyle = hexA(col.a, 0.6); ctx.lineWidth = k;
           ctx.beginPath(); ctx.arc(p.x, p.y, 6.5 * k, 0, Math.PI * 2); ctx.stroke();
         }
       }
 
+      if (helper) {
+        // small box and label for the helper hand
+        let hx0 = Infinity, hy0 = Infinity, hx1 = -Infinity, hy1 = -Infinity;
+        for (const p of pts) { hx0 = Math.min(hx0, p.x); hx1 = Math.max(hx1, p.x); hy0 = Math.min(hy0, p.y); hy1 = Math.max(hy1, p.y); }
+        const hp = 0.1 * Math.max(hx1 - hx0, hy1 - hy0) + 10 * k;
+        ctx.strokeStyle = hexA(col.a, 0.55); ctx.lineWidth = k;
+        brackets(ctx, hx0 - hp, hy0 - hp, hx1 + hp, hy1 + hp, Math.min(hx1 - hx0, hy1 - hy0) * 0.14);
+        const hl = (hand.label && hand.label !== 'unknown' ? hand.label : 'hand').toUpperCase();
+        text(`HAND 02 · ${hl} · ${String(o.helperPoseName || '').toUpperCase()}`, hx0 - hp, hy0 - hp - 8 * k, 10.5, hexA(col.a, 0.85));
+        return;
+      }
       if (!main) return;
 
       // tracking box with readouts
