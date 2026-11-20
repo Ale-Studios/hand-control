@@ -64,7 +64,11 @@ const DEFAULTS = {
     hudColor: 'ice',       // ice | amber | mint
     trail: true,           // fading trail behind the pointer
     glass: 'acrylic',      // window material (Windows 11): none | mica | acrylic
-    tint: 0.45,            // darkness of the glass (lower = more see-through, higher = easier to read)
+    tint: 0.32,            // darkness of the glass (lower = more see-through, higher = easier to read)
+    alwaysOnTop: true,     // the window floats above the other apps (transparent, so you still see them)
+    handOverlay: true,     // draw the hand on the screen, above every window (click-through)
+    overlaySize: 260,      // height of the hand drawn on screen, in pixels
+    overlayOpacity: 0.9,   // opacity of the hand drawn on screen
   },
 };
 

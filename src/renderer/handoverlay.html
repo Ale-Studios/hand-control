@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'self' 'unsafe-inline'" />
+<style>
+  html, body { margin: 0; width: 100%; height: 100%; background: transparent; overflow: hidden; }
+  canvas { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script>
+// The hand on screen: drawn over every window. The skeleton is placed so that the pointing point sits exactly on the cursor.
+const COLORS = { ice: ['#c4ecfa', '#7fd0ee'], amber: ['#ffd9a0', '#ffab40'], mint: ['#c2f7e1', '#5fe0b0'] };
+const CONN = [[0,1],[1,2],[2,3],[3,4],[0,5],[5,6],[6,7],[7,8],[5,9],[9,10],[10,11],[11,12],[9,13],[13,14],[14,15],[15,16],[13,17],[17,18],[18,19],[19,20],[0,17]];
+const TIPS = [4, 8, 12, 16, 20];
+const PALM = [0, 1, 5, 9, 13, 17];
+const TRAIL_MS = 600;
+const hexA = (hex, a) => { const n = parseInt(hex.slice(1), 16); return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`; };
+
+const cv = document.getElementById('c');
+const ctx = cv.getContext('2d');
+let cfg = { size: 260, opacity: 0.9, color: 'ice', mirror: true, trail: true };
+let frame = null;
+let trail = [];
+let raf = 0;
+let spin = 0;
+
+function fit() {
+  const dpr = window.devicePixelRatio || 1;
+  cv.width = Math.round(innerWidth * dpr); cv.height = Math.round(innerHeight * dpr);
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+addEventListener('resize', () => { fit(); schedule(); });
+fit();
+
+function schedule() { if (!raf) raf = requestAnimationFrame(() => { raf = 0; draw(); }); }
+
+if (window.handAPI) {
+  handAPI.onConfig((c) => { cfg = { ...cfg, ...c }; schedule(); });
+  handAPI.onFrame((p) => { frame = p; schedule(); });
+}
+
+/** Draws one hand: the point (au, av) of the hand is put at screen position (cx, cy). */
+function drawHand(lm, au, av, cx, cy, strong, aspect, col) {
+  const xm = (x) => (cfg.mirror ? 1 - x : x);
+  const span = Math.hypot((lm[0][0] - lm[9][0]) * aspect, lm[0][1] - lm[9][1]) || 0.05;
+  const s = cfg.size / (span * 2.1); // wrist→middle knuckle is about 1/2.1 of the hand length
+  const pts = lm.map(([x, y]) => [cx + (xm(x) - au) * aspect * s, cy + (y - av) * s]);
+  const k = Math.max(1, cfg.size / 260);
+  ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+
+  ctx.beginPath();
+  PALM.forEach((i, n) => (n ? ctx.lineTo(pts[i][0], pts[i][1]) : ctx.moveTo(pts[i][0], pts[i][1])));
+  ctx.closePath();
+  ctx.fillStyle = hexA(col[1], strong ? 0.12 : 0.06);
+  ctx.fill();
+
+  const CASE = 'rgba(8, 12, 18, 0.62)';
+  ctx.shadowBlur = 0; ctx.strokeStyle = CASE; ctx.lineWidth = ((strong ? 2.2 : 1.6) + 3.4) * k;
+  ctx.beginPath();
+  for (const [a, b] of CONN) { ctx.moveTo(pts[a][0], pts[a][1]); ctx.lineTo(pts[b][0], pts[b][1]); }
+  ctx.stroke();
+  ctx.shadowColor = col[1]; ctx.shadowBlur = (strong ? 12 : 6) * k;
+  ctx.strokeStyle = hexA(col[0], strong ? 0.95 : 0.6); ctx.lineWidth = (strong ? 2.2 : 1.6) * k;
+  ctx.beginPath();
+  for (const [a, b] of CONN) { ctx.moveTo(pts[a][0], pts[a][1]); ctx.lineTo(pts[b][0], pts[b][1]); }
+  ctx.stroke();
+  ctx.shadowBlur = 0;
+
+  pts.forEach(([x, y], n) => {
+    const tip = TIPS.includes(n);
+    ctx.fillStyle = CASE;
+    ctx.beginPath(); ctx.arc(x, y, ((tip ? 4 : 2.6) + 1.8) * k, 0, Math.PI * 2); ctx.fill();
+    if (tip) { ctx.strokeStyle = CASE; ctx.lineWidth = 3.2 * k; ctx.beginPath(); ctx.arc(x, y, 9 * k, 0, Math.PI * 2); ctx.stroke(); }
+    ctx.fillStyle = hexA(col[0], strong ? 1 : 0.7);
+    ctx.beginPath(); ctx.arc(x, y, (tip ? 4 : 2.6) * k, 0, Math.PI * 2); ctx.fill();
+    if (tip) { ctx.strokeStyle = hexA(col[0], 0.6); ctx.lineWidth = k; ctx.beginPath(); ctx.arc(x, y, 9 * k, 0, Math.PI * 2); ctx.stroke(); }
+  });
+  return pts;
+}
+
+function draw() {
+  ctx.clearRect(0, 0, innerWidth, innerHeight);
+  ctx.globalAlpha = cfg.opacity;
+  const f = frame;
+  if (!f || !f.hud || !f.hud.handVisible || !f.hands || !f.hands.length) { trail = []; ctx.globalAlpha = 1; return; }
+  const col = COLORS[cfg.color] || COLORS.ice;
+  const H = f.hud, aspect = f.aspect || 16 / 9;
+  const now = performance.now();
+  spin += 0.05;
+
+  // steering hand: its pointing point sits on the cursor
+  const steer = f.hands[H.steerIndex >= 0 ? H.steerIndex : 0];
+  const cx = H.screen.x * innerWidth, cy = H.screen.y * innerHeight;
+  let pts = null;
+  if (steer && H.anchor) pts = drawHand(steer, H.anchor.u, H.anchor.v, cx, cy, true, aspect, col);
+
+  // two-hand mode: the helper hand is drawn where it really points
+  if (f.helper && f.helper.lm && f.helper.screen) {
+    const hs = f.helper.screen;
+    drawHand(f.helper.lm, f.helper.anchor.u, f.helper.anchor.v, hs.x * innerWidth, hs.y * innerHeight, false, aspect, col);
+  }
+
+  // trail + reticle at the cursor
+  if (cfg.trail) {
+    trail.push({ x: cx, y: cy, t: now });
+    while (trail.length && now - trail[0].t > TRAIL_MS) trail.shift();
+    for (let i = 1; i < trail.length; i++) {
+      const age = (now - trail[i].t) / TRAIL_MS;
+      ctx.strokeStyle = hexA(col[1], Math.max(0, 0.7 * (1 - age))); ctx.lineWidth = Math.max(0.6, (1 - age) * 3.4);
+      ctx.beginPath(); ctx.moveTo(trail[i - 1].x, trail[i - 1].y); ctx.lineTo(trail[i].x, trail[i].y); ctx.stroke();
+    }
+  } else trail = [];
+  const c = H.pressed ? '#ff7a75' : H.mode === 'active' ? '#3ddc97' : col[0];
+  const r = H.pressed ? 9 : 14;
+  ctx.shadowBlur = 0; ctx.strokeStyle = 'rgba(8, 12, 18, 0.62)'; ctx.lineWidth = 4.6;
+  ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.stroke();
+  ctx.shadowColor = c; ctx.shadowBlur = 10; ctx.strokeStyle = c; ctx.lineWidth = 1.6;
+  ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.stroke();
+  ctx.beginPath();
+  for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { ctx.moveTo(cx + dx * (r + 3), cy + dy * (r + 3)); ctx.lineTo(cx + dx * (r + 9), cy + dy * (r + 9)); }
+  ctx.stroke();
+  ctx.fillStyle = c; ctx.beginPath(); ctx.arc(cx, cy, 2.4, 0, Math.PI * 2); ctx.fill();
+  ctx.shadowBlur = 0;
+
+  // small gesture label under the hand
+  if (pts && f.hud.poseName) {
+    let bx = Infinity, by = -Infinity;
+    for (const [x, y] of pts) { bx = Math.min(bx, x); by = Math.max(by, y); }
+    ctx.font = '11px "Cascadia Mono", Consolas, monospace'; ctx.textAlign = 'left';
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.9)'; ctx.shadowBlur = 4;
+    ctx.fillStyle = hexA(col[0], 1);
+    ctx.fillText(String(f.hud.poseName).toUpperCase(), bx, by + 18);
+    ctx.shadowBlur = 0;
+  }
+  ctx.globalAlpha = 1;
+}
+</script>
+</body>
+</html>

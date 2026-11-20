@@ -27,6 +27,17 @@ translucent Windows 11 window), an always-on-top status badge (ACTIVE / PAUSED /
 while the camera is on), guided calibration of the movement area, settings for sensitivity / smoothing / area / distance,
 and a **Measure** tab (latency, jitter, precision).
 
+## Your hand on the screen, above every window
+
+A transparent layer covers the screen you control and draws **your hand** (glowing skeleton, reticle on the cursor, fading trail) **above every
+other window, even above Hand Control's own window**, so you see it grabbing folders and pressing buttons. The layer never intercepts a click
+or a key, and it keeps drawing when the main window is hidden in the tray. *Settings → Camera*: on/off, size and opacity of the hand, HUD colour.
+The hand has a thin dark outline so it stays visible on white pages as well as on dark windows.
+
+The main window can **float above the other apps** (*Keep this window above the other apps*) and, with the glass effect, its background and
+buttons are see-through (*Glass tint* lowers or raises the see-through level). Limits: the layer is not shown over games or videos in
+"exclusive" full screen, and a screen share or screenshot will include the hand.
+
 ## Actions, launcher and two-hand mode
 
 **Action gestures.** Touch thumb and ring finger (or little finger) for half a second, keeping the index finger up: Hand Control runs

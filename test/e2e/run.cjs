@@ -58,6 +58,9 @@ setTimeout(() => { console.error('Test TIMEOUT: exiting'); try { require('../../
   await target.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(html));
   target.showInactive?.();
   await sleep(600);
+  // The on-screen hand layer is a full-screen window ABOVE the test window: every click of every test has to go through it.
+  api.setHandOverlay(true);
+  await sleep(1500);
 
   // ── log of what the app sends to the mouse (for timing) ──
   const injected = [];
@@ -114,7 +117,7 @@ setTimeout(() => { console.error('Test TIMEOUT: exiting'); try { require('../../
 
   // 1) nothing moves while paused
   const ALL = !ONLY.length;
-  if (ALL) {
+  if (ALL || want('pause')) {
   const c0 = cursor(); m0 = mark();
   await drive(1000, (ms) => hand('point', 0.2 + 0.6 * (ms / 1000), 0.5));
   await sleep(150);
@@ -375,6 +378,22 @@ setTimeout(() => { console.error('Test TIMEOUT: exiting'); try { require('../../
     const big = (pose, sx, sy) => makeHand({ pose, at: at(sx, sy), size: 0.3 }); // a hand at a realistic size
     await drive(900, (ms) => big('point', 0.25 + 0.4 * (ms / 900), 0.35 + 0.2 * Math.sin(ms / 160)));
     fs.writeFileSync(out.replace('.png', '-hud-point.png'), (await api.win().webContents.capturePage()).toPNG());
+    // the hand on the screen: where is it drawn, how big, and is it above everything?
+    await drive(1000, () => big('point', 0.6, 0.45));
+    const ov = api.handOverlay();
+    const img = await ov.webContents.capturePage();
+    const bmp = img.toBitmap(); const sz = img.getSize();
+    let minx = 1e9, miny = 1e9, maxx = -1, maxy = -1, opaque = 0;
+    for (let y = 0; y < sz.height; y++) for (let x = 0; x < sz.width; x++) {
+      if (bmp[(y * sz.width + x) * 4 + 3] > 40) { opaque++; if (x < minx) minx = x; if (x > maxx) maxx = x; if (y < miny) miny = y; if (y > maxy) maxy = y; }
+    }
+    const wantSize = api.settings().ui.overlaySize, bh = maxy - miny;
+    const cur = { x: 0.6 * sz.width, y: 0.45 * sz.height };
+    fs.writeFileSync(out.replace('.png', '-hand-overlay.png'), img.toPNG());
+    check('the hand layer exists, is visible and sits above the other windows', !!ov && ov.isVisible() && ov.isAlwaysOnTop(), ov ? 'always on top: ' + ov.isAlwaysOnTop() : 'missing');
+    check('the hand is drawn on the screen around the cursor, at about the chosen size',
+      opaque > 500 && cur.x >= minx && cur.x <= maxx && cur.y >= miny && cur.y <= maxy && bh > wantSize * 0.6 && bh < wantSize * 1.6,
+      'drawn box ' + (maxx - minx) + 'x' + bh + ' px, cursor at ' + Math.round(cur.x) + ',' + Math.round(cur.y) + ', wanted height ~' + wantSize);
     await drive(500, () => big('pinch', 0.6, 0.5));
     fs.writeFileSync(out.replace('.png', '-hud-pinch.png'), (await api.win().webContents.capturePage()).toPNG());
     await drive(500, () => big('scroll', 0.5, 0.5));

@@ -13,6 +13,7 @@ let S = null;            // current settings
 let DEFAULTS = null;
 let PRESETS = {};
 let ACTION_PRESETS = [];
+let handOverlayOn = false; // the on-screen hand layer exists (the main process tells us)
 let mode = 'paused';
 let screenSize = { w: 1920, h: 1080 };
 let info = {};
@@ -205,8 +206,32 @@ function onFrame(frame) {
   if (cal.active) calFeed(hud, frame.t);
   if (rec.active) recFeed(frame, hud);
   if (jitter.active) jitterFeed(hud);
+  if (handOverlayOn) sendHandToScreen(frame, hud);
   draw(frame, hud);
   refreshHold();
+}
+
+// ───────────────────────── the hand on the screen (over every window) ─────────────────────────
+function sendHandToScreen(frame, hud) {
+  const r4 = (n) => Math.round(n * 10000) / 10000;
+  const hands = (frame.hands || []).map((h) => h.lm.map((p) => [r4(p.x), r4(p.y)]));
+  const payload = {
+    hands,
+    aspect: frame.meta && frame.meta.W ? frame.meta.W / frame.meta.H : 16 / 9,
+    hud: {
+      handVisible: hud.handVisible, mode: hud.mode, pressed: !!hud.pressed, anchor: hud.anchor, screen: hud.screen,
+      steerIndex: hud.steerIndex, poseName: POSE_EN[hud.pose] || '',
+    },
+  };
+  if (hud.helperIndex >= 0 && frame.hands[hud.helperIndex]) {
+    // the helper hand is drawn where it really points: its knuckle goes through the same mapping as the cursor
+    const lm = frame.hands[hud.helperIndex].lm;
+    const ax = (lm[5].x + lm[6].x) / 2, ay = (lm[5].y + lm[6].y) / 2;
+    const u = S.camera.mirror ? 1 - ax : ax;
+    const sc = mapToScreen(u, ay, S.control.area, S.control.sensitivity, S.control.snap);
+    payload.helper = { lm: hands[hud.helperIndex], anchor: { u, v: ay }, screen: sc };
+  }
+  hc.handFrame(payload);
 }
 
 // ───────────────────────── preview ─────────────────────────
@@ -278,6 +303,10 @@ const SCHEMA = () => [
   { id: 'ui.glass', type: 'select', label: 'Window glass effect', options: [['acrylic', 'Acrylic (see-through, blurred)'], ['mica', 'Mica (subtle)'], ['none', 'Off (solid)']], help: 'Windows 11 only.' },
   { id: 'ui.tint', type: 'range', min: 0.1, max: 0.9, step: 0.05, label: 'Glass tint', fmt: (v) => Math.round(v * 100) + '%', help: 'Lower = more see-through. Raise it if the text is hard to read over a bright background.' },
   { id: 'ui.trail', type: 'check', label: 'Show the pointer trail' },
+  { id: 'ui.handOverlay', type: 'check', label: 'Draw my hand on the screen, above every window', help: 'A transparent layer that never blocks your clicks. It also shows the hand when this window is hidden.' },
+  { id: 'ui.overlaySize', type: 'range', min: 120, max: 500, step: 10, label: 'Size of the hand on screen', fmt: (v) => v + ' px' },
+  { id: 'ui.overlayOpacity', type: 'range', min: 0.3, max: 1, step: 0.05, label: 'Opacity of the hand on screen', fmt: (v) => Math.round(v * 100) + '%' },
+  { id: 'ui.alwaysOnTop', type: 'check', label: 'Keep this window above the other apps (it is transparent)' },
   { id: 'ui.showSkeleton', type: 'check', label: 'Show the hand skeleton' },
   { id: 'ui.showArea', type: 'check', label: 'Show the active area' },
   { g: 'Cursor' },
@@ -591,6 +620,8 @@ async function init() {
   hc.on.mode((m) => { mode = m.mode; engine.setMode(mode); refreshStatus(); refreshHold(); });
   hc.on.settings((s) => { S = s; syncFormFromSettings(); applyMirror(); });
   hc.on.glass(setGlass);
+  hc.on.handOverlay((on) => { handOverlayOn = !!on; });
+  handOverlayOn = !!info.handOverlay;
   hc.on.screen((s) => { screenSize = s; engine.setScreen(s.w, s.h); });
   hc.on.log(addLogLine);
   hc.on.hotkeys(showHotkeys);

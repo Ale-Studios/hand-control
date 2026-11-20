@@ -29,6 +29,15 @@ body { display: flex; flex-direction: column; overflow: hidden; background: radi
 /* with the glass effect on, the window itself is translucent */
 html.glass body { background: linear-gradient(180deg, rgba(18, 20, 24, var(--tint)), rgba(12, 14, 17, calc(var(--tint) * 1.15))); }
 html.glass { --panel-a: calc(var(--tint) * .8); }
+/* with the glass effect on, buttons are see-through too: only a thin silver outline and a light tint */
+html.glass .btn { background: rgba(255, 255, 255, .035); border-color: rgba(255, 255, 255, .22); }
+html.glass .btn:hover { background: rgba(255, 255, 255, .1); }
+html.glass .btn.primary { background: rgba(207, 214, 222, .22); color: #fff; border-color: rgba(207, 214, 222, .75); }
+html.glass .btn.primary:hover { background: rgba(207, 214, 222, .4); box-shadow: 0 0 16px rgba(255, 255, 255, .2); }
+html.glass .btn.primary:disabled { background: rgba(207, 214, 222, .08); color: rgba(255, 255, 255, .45); }
+html.glass .btn.danger { background: rgba(239, 83, 80, .08); }
+html.glass header { background: rgba(10, 12, 15, calc(var(--tint) * .5)); }
+html.glass .strip, html.glass .card { background: transparent; }
 ::-webkit-scrollbar { width: 8px; } ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, .14); border-radius: 4px; }
 

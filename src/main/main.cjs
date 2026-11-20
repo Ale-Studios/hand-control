@@ -228,6 +228,7 @@ function createWindow() {
   });
   Menu.setApplicationMenu(null);
   win.loadURL('hc://app/index.html');
+  applyTop();
   win.on('close', () => { quitting = true; });
   win.on('closed', () => { win = null; });
   if (flag('--dev')) win.webContents.openDevTools({ mode: 'detach' });
@@ -238,6 +239,58 @@ function createWindow() {
     });
     win.webContents.on('render-process-gone', (_e, d) => console.log('[page] process gone:', d.reason));
   }
+}
+
+// ─────────────────────────── the hand on screen ───────────────────────────
+// A transparent, click-through window over the controlled screen, ABOVE every other window (and above this app's own window).
+// The hand skeleton, the reticle and the trail are drawn here, so you see your hand grabbing the folders.
+let handOv = null;
+let handOvForce = false; // tests switch it on by hand
+const handOverlayWanted = () => (E2E ? handOvForce : !!settings.ui.handOverlay && cameraState === 'on');
+function controlledDisplayBounds() {
+  const all = screen.getAllDisplays();
+  return (all[settings.control.display] || screen.getPrimaryDisplay()).bounds; // DIP
+}
+function handOverlayConfig() {
+  return { size: settings.ui.overlaySize, opacity: settings.ui.overlayOpacity, color: settings.ui.hudColor, mirror: settings.camera.mirror, trail: settings.ui.trail };
+}
+function syncHandOverlay() {
+  const want = handOverlayWanted();
+  const alive = handOv && !handOv.isDestroyed();
+  if (!want) {
+    if (alive) handOv.close();
+    send('hand-overlay', false);
+    return;
+  }
+  const b = controlledDisplayBounds();
+  if (alive) {
+    handOv.setBounds(b);
+    handOv.webContents.send('hand:config', handOverlayConfig());
+    send('hand-overlay', true);
+    return;
+  }
+  handOv = new BrowserWindow({
+    x: b.x, y: b.y, width: b.width, height: b.height,
+    frame: false, transparent: true, resizable: false, movable: false, focusable: false, skipTaskbar: true,
+    hasShadow: false, fullscreenable: false, show: false,
+    webPreferences: { preload: path.join(__dirname, 'handoverlay-preload.cjs'), contextIsolation: true, nodeIntegration: false, sandbox: true, backgroundThrottling: false },
+  });
+  const w = handOv;
+  w.setIgnoreMouseEvents(true, { forward: false }); // NEVER intercepts a click or a key
+  w.setAlwaysOnTop(true, 'screen-saver', 1);        // above everything, even the other overlays
+  w.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+  w.loadURL('hc://app/handoverlay.html');
+  w.webContents.once('did-finish-load', () => {
+    if (w.isDestroyed()) return;
+    w.webContents.send('hand:config', handOverlayConfig());
+    w.showInactive();
+    send('hand-overlay', true);
+  });
+  w.on('closed', () => { if (handOv === w) handOv = null; });
+}
+// the main window: floats above the other apps when asked
+function applyTop() {
+  if (win && !win.isDestroyed()) win.setAlwaysOnTop(!!settings.ui.alwaysOnTop, 'floating');
 }
 
 function createOverlay() {
@@ -313,7 +366,7 @@ function wireIpc() {
     return {
       settings, defaults: DEFAULTS, mode, presets: DISTANCE_PRESETS, actionPresets: ACTION_PRESETS, screen: { w: s.w, h: s.h },
       hotkeys: hotkeyInfo(), log: logLines, blocked: blockedRequests,
-      info: { glass: glassMode(), delegate: DELEGATE, version: app.getVersion(), e2e: E2E, bench: BENCH, userData: app.getPath('userData'), displays: screen.getAllDisplays().length },
+      info: { handOverlay: handOverlayWanted(), glass: glassMode(), delegate: DELEGATE, version: app.getVersion(), e2e: E2E, bench: BENCH, userData: app.getPath('userData'), displays: screen.getAllDisplays().length },
     };
   });
 
@@ -331,6 +384,8 @@ function wireIpc() {
     if (settings.safety.killKey !== before.safety.killKey || settings.safety.pauseKey !== before.safety.pauseKey) registerHotkeys();
     if (settings.control.display !== before.control.display) applyScreen();
     if (settings.ui.glass !== before.ui.glass) applyGlass();
+    if (settings.ui.alwaysOnTop !== before.ui.alwaysOnTop) applyTop();
+    if (settings.ui.handOverlay !== before.ui.handOverlay || settings.control.display !== before.control.display || settings.ui.overlaySize !== before.ui.overlaySize || settings.ui.overlayOpacity !== before.ui.overlayOpacity || settings.ui.hudColor !== before.ui.hudColor || settings.ui.trail !== before.ui.trail || settings.camera.mirror !== before.camera.mirror) syncHandOverlay();
     send('settings', settings);
     return settings;
   });
@@ -369,7 +424,13 @@ function wireIpc() {
     cameraState = ['on', 'off', 'error'].includes(s) ? s : 'off';
     if (cameraState !== 'on') handSeen = false;
     addLog(cameraState === 'on' ? 'Camera on' : cameraState === 'off' ? 'Camera off' : 'Camera error');
-    refreshTray(); sendOverlay();
+    refreshTray(); sendOverlay(); syncHandOverlay();
+  });
+
+  // hand landmarks from the camera window → the on-screen hand layer
+  ipcMain.on('hand:frame', (e, p) => {
+    if (!fromMain(e) || !p) return;
+    if (handOv && !handOv.isDestroyed() && handOv.isVisible()) handOv.webContents.send('hand:frame', p);
   });
 
   ipcMain.on('hud', (e, h) => {
@@ -454,10 +515,11 @@ if (!gotLock) {
         .then((i) => console.log('[gpu] ' + JSON.stringify((i.gpuDevice || []).map((d) => ({ name: d.deviceString, active: !!d.active })))))
         .catch(() => {}), 8000);
     }
-    screen.on('display-metrics-changed', () => applyScreen());
+    screen.on('display-metrics-changed', () => { applyScreen(); syncHandOverlay(); });
     addLog('Hand Control started — PAUSED. Hold an open hand still to activate.');
     Object.defineProperty(api, 'mode', { get: () => mode, enumerable: true });
     Object.assign(api, {
+      handOverlay: () => handOv, setHandOverlay: (on) => { handOvForce = !!on; syncHandOverlay(); },
       setMode, input, actions, settings: () => settings, setSettings: (p) => { settings = merge(settings, p); send('settings', settings); },
       win: () => win, overlay: () => overlay, send, hotkeys: hotkeyInfo, blocked: () => blockedRequests,
       nowMs, userData: () => app.getPath('userData'), cameraState: () => cameraState, handSeen: () => handSeen,
