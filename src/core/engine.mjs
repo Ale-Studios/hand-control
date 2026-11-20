@@ -30,6 +30,7 @@ const HAND_FLICKER_MS = 150;
 const WHEEL_STEP = 40;     // wheel "clicks" are multiples of 40 (120 = one full notch)
 const DOUBLE_CLICK_MS = 500;
 const DOUBLE_CLICK_SNAP = 0.03; // screen fraction within which the 2nd click "sticks" to the 1st
+const GLIDE_STEP_PX = 40;       // when a drag starts, the cursor catches up with the hand at most this much per frame
 const CLICK_STICK_PX = 24;       // after a click the cursor stays put unless the hand moves more than this (screen pixels)
 const ACTION_HOLD_MS = 500;
 
@@ -70,9 +71,10 @@ function classify(tr, m, S) {
 }
 
 /** Commits a pose once it has lasted long enough. Returns the previous pose if it changed, else null. */
-function debounce(tr, raw, t, S) {
+function debounce(tr, raw, t, S, leaveMs) {
   if (raw !== tr.cand) { tr.cand = raw; tr.candSince = t; }
-  const need = tr.pose === 'pinch' ? Math.min(S.clicks.confirmMs, 40) : S.clicks.confirmMs;
+  // leaving a pinch is quick (a click should end promptly), except while dragging: a finger slip must not drop the thing you carry
+  const need = tr.pose === 'pinch' ? (leaveMs != null ? leaveMs : Math.min(S.clicks.confirmMs, 40)) : S.clicks.confirmMs;
   if (tr.pose !== tr.cand && t - tr.candSince >= need) {
     const prev = tr.pose;
     tr.pose = tr.cand;
@@ -119,6 +121,7 @@ export class GestureEngine {
     this.pressOwner = null;  // 'main' | 'helper': which hand holds the button
     this.pressT = 0;
     this.dragging = false;
+    this.glide = null;
     this.freezePos = null;
     this.lastClick = null;   // {x,y,t} of the last short click (for the double click)
     this.lastRightT = -Infinity;
@@ -155,7 +158,7 @@ export class GestureEngine {
     const wl = steer.wl || worldFromImage(steer.lm);
     const m = measure(wl);
     const raw = classify(tr, m, S);
-    const prev = debounce(tr, raw, t, S);
+    const prev = debounce(tr, raw, t, S, this.dragging && this.pressOwner === 'main' ? S.clicks.dragReleaseMs : undefined);
     if (prev !== null && this.mode === 'active') this._onPoseChange(prev, tr.pose, t, S);
 
     const anchor = this._anchor(steer.lm, S);
@@ -176,6 +179,7 @@ export class GestureEngine {
       anchor,
       screen: { ...this.ptr },
       pressed: this.pressed,
+      dragging: this.dragging,
       measures: m,
       steerIndex: hands.indexOf(steer),
       helperIndex: helper ? hands.indexOf(helper) : -1,
@@ -242,7 +246,8 @@ export class GestureEngine {
     h.lastSeen = t;
     const m = measure(hand.wl || worldFromImage(hand.lm));
     const raw = classify(h, m, S);
-    const prev = debounce(h, raw, t, S);
+    const holding = this.pressOwner === 'helper' && t - this.pressT > S.clicks.dragFreezeMs;
+    const prev = debounce(h, raw, t, S, holding ? S.clicks.dragReleaseMs : undefined);
     if (this.mode === 'active') {
       if (prev !== null) this._helperPoseChange(prev, h.pose, t, S);
       if (h.pose === 'scroll') this._scroll(hand, t, S, this.scrollHelper);
@@ -254,14 +259,14 @@ export class GestureEngine {
     const h = this.helper;
     if (prev === 'pinch' && this.pressOwner === 'helper') this._release(t, 'helper');
     if (next === 'pinch' && !this.pressed) {
-      const f = this._histAt(h.candSince - 30);
+      const f = this._aimAt(h.candSince, S);
       this.emit({ type: 'move', x: f.x, y: f.y, meta: this.meta });
       this.emit({ type: 'down', button: 'left', meta: this.meta });
       this.pressed = 'left'; this.pressOwner = 'helper'; this.pressT = t; this.dragging = false; this.freezePos = f;
     }
     if (next === 'rclick' && t - this.lastRightT > 350) {
       this.lastRightT = t;
-      const f = this._histAt(h.candSince - 30);
+      const f = this._aimAt(h.candSince, S);
       this.emit({ type: 'move', x: f.x, y: f.y, meta: this.meta });
       this.emit({ type: 'click', button: 'right', meta: this.meta });
     }
@@ -298,6 +303,24 @@ export class GestureEngine {
     this.ptr = mapToScreen(u, v, c.area, c.sensitivity, c.snap);
     this.hist.push({ t, x: this.ptr.x, y: this.ptr.y });
     while (this.hist.length > 2 && t - this.hist[0].t > 700) this.hist.shift();
+  }
+
+  /**
+   * Where the cursor should be when a pinch/click is recognised. The pinch itself nudges the hand (the aim "drifts"
+   * while the fingers close), so if the aim was still before the gesture we use its calm position a little earlier
+   * (the median over the last lookbackMs); if the hand was moving, we use the latest position.
+   */
+  _aimAt(tCand, S) {
+    const latest = this._histAt(tCand - 30);
+    const lb = S.clicks.lookbackMs;
+    if (!lb) return latest;
+    const older = this._histAt(tCand - 180);
+    const speed = Math.hypot((latest.x - older.x) * this.screen.w, (latest.y - older.y) * this.screen.h) / 0.15; // px/s
+    if (speed > 120) return latest; // moving: do not pull the click back
+    const pts = this.hist.filter((h) => h.t >= tCand - lb && h.t <= tCand - 30);
+    if (pts.length < 3) return latest;
+    const med = (a) => { const s = [...a].sort((p, q) => p - q); return s[s.length >> 1]; };
+    return { x: med(pts.map((p) => p.x)), y: med(pts.map((p) => p.y)) };
   }
 
   _histAt(tt) {
@@ -365,7 +388,7 @@ export class GestureEngine {
     if (next === 'pinch') this._press(t, S);
     if (next === 'rclick' && t - this.lastRightT > 350) {
       this.lastRightT = t;
-      const f = this._histAt(this.main.candSince - 30);
+      const f = this._aimAt(this.main.candSince, S);
       this.emit({ type: 'move', x: f.x, y: f.y, meta: this.meta });
       this.emit({ type: 'click', button: 'right', meta: this.meta });
     }
@@ -374,7 +397,7 @@ export class GestureEngine {
 
   _press(t, S) {
     if (this.pressed) return; // the other hand already holds the button
-    let f = this._histAt(this.main.candSince - 30);
+    let f = this._aimAt(this.main.candSince, S);
     // Double click: the second pinch "sticks" to the point of the first.
     if (this.lastClick && t - this.lastClick.t < DOUBLE_CLICK_MS
       && Math.hypot((f.x - this.lastClick.x) * this.screen.w, (f.y - this.lastClick.y) * this.screen.h) < DOUBLE_CLICK_SNAP * this.screen.w) {
@@ -417,8 +440,19 @@ export class GestureEngine {
         && Math.hypot((p.x - lc.x) * this.screen.w, (p.y - lc.y) * this.screen.h) < CLICK_STICK_PX) p = { x: lc.x, y: lc.y };
       this.emit({ type: 'move', x: p.x, y: p.y, meta: this.meta });
     } else if (pose === 'pinch' && this.pressed && this.pressOwner === 'main') {
-      if (!this.dragging && t - this.pressT >= S.clicks.dragFreezeMs) this.dragging = true;
-      if (this.dragging) this.emit({ type: 'move', x: this.ptr.x, y: this.ptr.y, meta: this.meta });
+      if (!this.dragging && t - this.pressT >= S.clicks.dragFreezeMs) { this.dragging = true; this.glide = this.freezePos ? { ...this.freezePos } : null; }
+      if (this.dragging) {
+        // The cursor has been held still since the pinch; the hand may be far from there now. Glide to it in small steps
+        // instead of one jump: Windows starts a drag (window, file, selection) only after a few regular small moves.
+        let p = this.ptr;
+        if (this.glide) {
+          const dx = (p.x - this.glide.x) * this.screen.w, dy = (p.y - this.glide.y) * this.screen.h;
+          const d = Math.hypot(dx, dy);
+          if (d <= GLIDE_STEP_PX) this.glide = null;
+          else { this.glide = { x: this.glide.x + (p.x - this.glide.x) * (GLIDE_STEP_PX / d), y: this.glide.y + (p.y - this.glide.y) * (GLIDE_STEP_PX / d) }; p = this.glide; }
+        }
+        this.emit({ type: 'move', x: p.x, y: p.y, meta: this.meta });
+      }
     } else if (pose === 'scroll') {
       this._scroll(hand, t, S, this.scrollMain);
     }

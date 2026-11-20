@@ -62,6 +62,17 @@ rejected instead of saved.
 **Two-hand mode** (*Settings → Cursor*). One hand steers the cursor, the other clicks, drags and scrolls, so you can click without
 holding the pointing hand still. A fist or an open hand on the helper hand does nothing.
 
+**Dragging windows and files.** Point at a title bar (or a file), **pinch and keep pinching** for a moment (~0.3 s): a red disc grows
+around the hand and the label says DRAGGING. Move your hand and the window follows; **open the pinch to drop it**. Details that make
+this reliable:
+- the click lands where you were aiming *just before* the pinch (*Settings → Clicks → Aim look-back*), so the pinch itself does not
+  push the cursor off the title bar;
+- when the drag starts, the cursor glides from the grab point to the hand instead of jumping, so the window does not leap;
+- a brief finger slip while you hold is ignored; the window is released only after the pinch really opens
+  (*Settings → Clicks → Drag release delay*).
+
+The on-screen hand is your cursor: it is drawn above every other window, while the real Windows cursor stays visible for now.
+
 **Cursor point.** *Settings → Cursor → Point that moves the cursor*: index knuckle (steady), **centre of the palm** (steadiest: it does
 not move when the fingers do) or index fingertip (most natural).
 

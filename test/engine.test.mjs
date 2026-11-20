@@ -370,3 +370,65 @@ test('after a click the cursor stays where it clicked for a moment (so a double 
   const last = [...events].reverse().find((e) => e.type === 'move');
   assert.ok(Math.abs(last.y - clickAt.y) * 1080 > 3, 'after the short window it follows the hand again');
 });
+// ───────────── dragging: aim look-back, glide at the start of a drag, holding through slips ─────────────
+const clickPos = (events) => { const i = events.findIndex((e) => e.type === 'down'); return events[i - 1]; };
+const px = (a, b) => Math.hypot((a.x - b.x) * 1920, (a.y - b.y) * 1080);
+
+test('click aim: if the aim was calm, the click lands on the calm position BEFORE the pinch nudged the hand', () => {
+  const run1 = (lookbackMs) => {
+    const { eng, events } = setup({ clicks: { lookbackMs } });
+    eng.setMode('active');
+    let t = run(eng, 0, 800, () => makeHand({ pose: 'point', at: CENTER }));
+    const start = [...events].reverse().find((e) => e.type === 'move');
+    // the hand drifts a little while the fingers close (about 15 px on the screen), then the pinch is recognised
+    t = run(eng, t, 250, (ms) => makeHand({ pose: 'point', at: { x: 0.5 + 0.004 * (ms / 250), y: 0.5 } }));
+    events.length = 0;
+    t = run(eng, t, 200, () => makeHand({ pose: 'pinch', at: { x: 0.504, y: 0.5 } }));
+    return px(clickPos(events), start);
+  };
+  const withLookback = run1(400), without = run1(0);
+  assert.ok(withLookback < without, `distance from the aimed point: ${withLookback.toFixed(1)} px with look-back < ${without.toFixed(1)} px without`);
+});
+
+test('click aim: if the hand was moving, the click is NOT pulled back', () => {
+  const run1 = (lookbackMs) => {
+    const { eng, events } = setup({ clicks: { lookbackMs } });
+    eng.setMode('active');
+    let t = run(eng, 0, 800, () => makeHand({ pose: 'point', at: { x: 0.4, y: 0.5 } }));
+    t = run(eng, t, 400, (ms) => makeHand({ pose: 'point', at: { x: 0.4 + 0.00013 * ms, y: 0.5 } })); // ~500 px/s
+    events.length = 0;
+    t = run(eng, t, 200, (ms) => makeHand({ pose: 'pinch', at: { x: 0.452 + 0.00013 * ms, y: 0.5 } }));
+    return clickPos(events);
+  };
+  assert.ok(px(run1(250), run1(0)) < 1, 'same position with and without look-back');
+});
+
+test('drag start: the cursor glides from where it was held to the hand in small steps (no single jump)', () => {
+  const { eng, events } = setup();
+  eng.setMode('active');
+  let t = run(eng, 0, 800, () => makeHand({ pose: 'point', at: CENTER }));
+  t = run(eng, t, 250, () => makeHand({ pose: 'pinch', at: CENTER }));
+  events.length = 0;
+  // during the 0.28 s freeze the hand has gone far away (~380 px): at the end of the freeze the cursor must catch up gradually
+  t = run(eng, t, 900, () => makeHand({ pose: 'pinch', at: { x: 0.4, y: 0.5 } }));
+  const moves = events.filter((e) => e.type === 'move');
+  let maxStep = 0;
+  for (let i = 1; i < moves.length; i++) maxStep = Math.max(maxStep, px(moves[i], moves[i - 1]));
+  assert.ok(maxStep <= 41, `largest cursor step ${maxStep.toFixed(1)} px (limit 40)`);
+  assert.ok(moves.length > 5, 'several regular moves while the drag starts');
+  const last = moves[moves.length - 1];
+  assert.ok(last.x > 0.55, 'it reached the hand (mirrored: the hand moved left in the image, so the cursor goes right)');
+});
+
+test('dragging: a brief slip of the pinch does not drop what you carry; a real release does', () => {
+  const { eng, events } = setup();
+  eng.setMode('active');
+  let t = run(eng, 0, 800, () => makeHand({ pose: 'point', at: CENTER }));
+  t = run(eng, t, 900, (ms) => makeHand({ pose: 'pinch', at: { x: 0.5 - 0.0001 * ms, y: 0.5 } })); // dragging now
+  events.length = 0;
+  t = run(eng, t, 66, () => makeHand({ pose: 'point', at: { x: 0.41, y: 0.5 } }));  // slip: 2 frames
+  t = run(eng, t, 300, () => makeHand({ pose: 'pinch', at: { x: 0.41, y: 0.5 } }));
+  assert.equal(events.filter((e) => e.type === 'up').length, 0, 'not dropped by a 66 ms slip');
+  t = run(eng, t, 400, () => makeHand({ pose: 'point', at: { x: 0.41, y: 0.5 } }));
+  assert.equal(events.filter((e) => e.type === 'up').length, 1, 'dropped when the pinch really opens');
+});

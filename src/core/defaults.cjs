@@ -24,6 +24,8 @@ const DEFAULTS = {
     pinchSensitivity: 1.0, // higher = a looser pinch is enough
     dragFreezeMs: 280,     // after the pinch the cursor stays still for this long (precise click)
     confirmMs: 60,         // a gesture must last at least this long to count
+    lookbackMs: 250,       // a click lands on where the aim was calm up to this long BEFORE the pinch (0 = off)
+    dragReleaseMs: 120,    // while dragging, the pinch must stay open this long before the thing is dropped
   },
   scroll: {
     speed: 1.0,

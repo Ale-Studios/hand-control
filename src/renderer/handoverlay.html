@@ -115,6 +115,10 @@ function draw() {
   } else trail = [];
   const c = H.pressed ? '#ff7a75' : H.mode === 'active' ? '#3ddc97' : col[0];
   const r = H.pressed ? 9 : 14;
+  if (H.pressed) { // grab feedback: a soft disc that grows while you drag
+    ctx.fillStyle = hexA('#ff7a75', H.dragging ? 0.28 : 0.2);
+    ctx.beginPath(); ctx.arc(cx, cy, H.dragging ? 24 : 18, 0, Math.PI * 2); ctx.fill();
+  }
   ctx.shadowBlur = 0; ctx.strokeStyle = 'rgba(8, 12, 18, 0.62)'; ctx.lineWidth = 4.6;
   ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.stroke();
   ctx.shadowColor = c; ctx.shadowBlur = 10; ctx.strokeStyle = c; ctx.lineWidth = 1.6;
@@ -132,7 +136,7 @@ function draw() {
     ctx.font = '11px "Cascadia Mono", Consolas, monospace'; ctx.textAlign = 'left';
     ctx.shadowColor = 'rgba(0, 0, 0, 0.9)'; ctx.shadowBlur = 4;
     ctx.fillStyle = hexA(col[0], 1);
-    ctx.fillText(String(f.hud.poseName).toUpperCase(), bx, by + 18);
+    ctx.fillText((H.dragging ? 'DRAGGING' : String(f.hud.poseName).toUpperCase()), bx, by + 18);
     ctx.shadowBlur = 0;
   }
   ctx.globalAlpha = 1;

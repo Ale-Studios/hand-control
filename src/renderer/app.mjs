@@ -220,7 +220,7 @@ function sendHandToScreen(frame, hud) {
     aspect: frame.meta && frame.meta.W ? frame.meta.W / frame.meta.H : 16 / 9,
     hud: {
       handVisible: hud.handVisible, mode: hud.mode, pressed: !!hud.pressed, anchor: hud.anchor, screen: hud.screen,
-      steerIndex: hud.steerIndex, poseName: POSE_EN[hud.pose] || '',
+      steerIndex: hud.steerIndex, poseName: POSE_EN[hud.pose] || '', dragging: !!hud.dragging,
     },
   };
   if (hud.helperIndex >= 0 && frame.hands[hud.helperIndex]) {
@@ -324,6 +324,8 @@ const SCHEMA = () => [
   { g: 'Clicks' },
   { id: 'clicks.pinchSensitivity', type: 'range', min: 0.6, max: 1.8, step: 0.05, label: 'Pinch sensitivity', fmt: (v) => v.toFixed(2) + '×', help: 'Higher = a looser pinch is enough.' },
   { id: 'clicks.dragFreezeMs', type: 'range', min: 100, max: 700, step: 10, label: 'Cursor held still after a pinch', fmt: (v) => v + ' ms', help: 'More precise clicks; after this time, moving your hand drags.' },
+  { id: 'clicks.lookbackMs', type: 'range', min: 0, max: 500, step: 25, label: 'Click aim: look back in time', fmt: (v) => (v === 0 ? 'off' : v + ' ms'), help: 'The click lands where your aim was calm just before the pinch, not where the pinch nudged your hand.' },
+  { id: 'clicks.dragReleaseMs', type: 'range', min: 40, max: 400, step: 10, label: 'Hold through finger slips (dragging)', fmt: (v) => v + ' ms', help: 'While you drag, a brief slip of the pinch does not drop what you carry.' },
   { id: 'clicks.confirmMs', type: 'range', min: 20, max: 160, step: 5, label: 'Minimum gesture duration', fmt: (v) => v + ' ms', help: 'Higher = fewer accidental clicks, but less responsive.' },
   { g: 'Actions' },
   { id: 'actions.ringPinch', type: 'select', label: 'Thumb + ring finger, held', options: ACTION_PRESETS, help: 'Keep the index finger up and touch thumb and ring finger for half a second.' },

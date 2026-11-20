@@ -352,6 +352,37 @@ setTimeout(() => { console.error('Test TIMEOUT: exiting'); try { require('../../
   await sleep(200);
   api.actions.closeLauncher();
   }
+  if (want('windrag') || ALL) {
+  // 12c) a real WINDOW drag: grab a title bar with a pinch, carry it, drop it (the window lives in another process)
+  await ensureActive();
+  const { spawn } = require('child_process');
+  const childEnv = { ...process.env }; delete childEnv.ELECTRON_RUN_AS_NODE;
+  const child = spawn(process.execPath, [path.join(__dirname, 'dragwin.cjs')], { env: childEnv, stdio: ['ignore', 'pipe', 'pipe'] });
+  let lastBounds = null, firstBounds = null;
+  child.stdout.on('data', (d) => { for (const l of String(d).split(/\r?\n/)) { if (l.startsWith('BOUNDS ')) { lastBounds = JSON.parse(l.slice(7)); if (!firstBounds) firstBounds = lastBounds; } } });
+  for (let i = 0; i < 100 && !firstBounds; i++) await sleep(100);
+  await sleep(500);
+  if (!firstBounds) { check('window drag: the test window started', false, 'no BOUNDS line from the child'); }
+  else {
+    const start = { ...lastBounds };
+    const grab = screen.dipToScreenPoint({ x: start.x + 190, y: start.y + 30 });    // on its title bar
+    const drop = { x: grab.x + 300, y: grab.y + 150 };
+    const sxy = (p) => [p.x / (input.screen.w - 1), p.y / (input.screen.h - 1)];
+    const [gx, gy] = sxy(grab), [dx, dy] = sxy(drop);
+    await drive(1200, () => hand('point', gx, gy)); await sleep(100);
+    const cOn = cursor();
+    await drive(1800, (ms) => { const k = Math.min(1, Math.max(0, (ms - 450) / 900)); return hand('pinch', gx + (dx - gx) * k, gy + (dy - gy) * k); });  // grab, carry
+    await drive(500, () => hand('point', dx, dy)); await sleep(500);
+    const b1 = JSON.stringify(lastBounds); await sleep(500); const stayed = JSON.stringify(lastBounds) === b1;
+    const end = lastBounds, sf = screen.getPrimaryDisplay().scaleFactor || 1;
+    const mx = Math.round((end.x - start.x) * sf), my = Math.round((end.y - start.y) * sf);   // in screen pixels
+    check('the cursor can be steered onto a title bar', near(cOn, grab, 8), 'cursor ' + cOn.x + ',' + cOn.y + ' title bar ' + Math.round(grab.x) + ',' + Math.round(grab.y));
+    check('a pinch held on a title bar drags the whole window (moved ~300,150)', Math.abs(mx - 300) <= 60 && Math.abs(my - 150) <= 60, 'window moved by ' + mx + ',' + my + ' px');
+    check('…and it is dropped when the pinch opens (window stays put afterwards)', stayed && !input.isDown(1));
+  }
+  try { child.kill(); } catch { /* ok */ }
+  await sleep(300);
+  }
   if (want('net') || ALL) {
   // 13) no network
   const w2 = new BrowserWindow({ show: false });
