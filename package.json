@@ -18,9 +18,10 @@
     "dist": "node scripts/build.cjs --installer"
   },
   "devDependencies": {
+    "@mediapipe/tasks-vision": "^1.2.3",
     "electron": "31.7.7",
     "electron-builder": "^26.18.0",
-    "@mediapipe/tasks-vision": "^1.2.3"
+    "rcedit": "^5.0.2"
   },
   "dependencies": {
     "koffi": "^3.3.8"
@@ -48,7 +49,11 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "Hand Control"
-    }
+      "shortcutName": "Hand Control",
+      "installerIcon": "build/icon.ico",
+      "uninstallerIcon": "build/icon.ico",
+      "installerHeaderIcon": "build/icon.ico"
+    },
+    "afterPack": "scripts/afterPack.cjs"
   }
 }
