@@ -14,7 +14,7 @@ The two-hand mode and the fine-tuning settings are still there, under *Settings 
 
 | Gesture | What happens |
 |---|---|
-| 🖐️ **Your hand** | moves the cursor: the centre of the palm steers it (with jitter smoothing). The hand pointer on screen **is** the cursor |
+| 🖐️ **Your hand** | moves the cursor: the centre of the palm steers it (with jitter smoothing). The round dot on screen **is** the cursor |
 | 🤏 **Pinch thumb + index** | left click · held and moved = drag · two pinches = double click |
 | 🤏 **Pinch thumb + middle** | right click |
 | ✌️ **Index + middle up** | scroll: move your hand up/down |
@@ -25,20 +25,20 @@ The two-hand mode and the fine-tuning settings are still there, under *Settings 
 | ⌨️ **Ctrl+Alt+K** | **emergency lock** from the keyboard (again = unlock, into pause). If another app owns that shortcut, Hand Control uses **Ctrl+Alt+Shift+K** and shows which one |
 
 Also: a HUD-style preview (dimmed camera image; glowing hand skeleton, translucent palm, tracking box, pointer reticle with a fading
-trail, live pinch gauge; colour, brightness and trail are adjustable in *Settings → Camera*; *Window glass effect* gives a
-translucent Windows 11 window), an always-on-top status badge (ACTIVE / PAUSED / LOCKED / hand not seen, plus a red dot
+trail, live pinch gauge; colour, brightness and trail are adjustable in *Settings → Camera*; the window background is
+see-through), an always-on-top status badge (ACTIVE / PAUSED / LOCKED / hand not seen, plus a red dot
 while the camera is on), guided calibration of the movement area, settings for sensitivity / smoothing / area / distance,
 and a **Measure** tab (latency, jitter, precision).
 
 ## Your hand on the screen, above every window
 
-A transparent layer covers the screen you control and draws **your hand** (glowing skeleton, reticle on the cursor, fading trail) **above every
-other window, even above Hand Control's own window**, so you see it grabbing folders and pressing buttons. The layer never intercepts a click
-or a key, and it keeps drawing when the main window is hidden in the tray. *Settings → Camera*: on/off, size and opacity of the hand, HUD colour.
-The hand has a thin dark outline so it stays visible on white pages as well as on dark windows.
+A transparent layer covers the screen you control and draws **the cursor** (a round dot with a fading trail; or, if you prefer, your
+full tracked hand) **above every other window, even above Hand Control's own window**, so you see it grabbing folders and pressing
+buttons. The layer never intercepts a click or a key, and it keeps drawing when the main window is hidden in the tray. *Settings*: on/off,
+look, size and opacity of the cursor, HUD colour. It has a thin dark outline so it stays visible on white pages as well as on dark windows.
 
-The main window can **float above the other apps** (*Keep this window above the other apps*) and, with the glass effect, its background and
-buttons are see-through (*Glass tint* lowers or raises the see-through level). Limits: the layer is not shown over games or videos in
+The main window **floats above the other apps** (*Keep this window above the other apps*) and its **background is see-through**, so you
+see the apps under it; text, buttons and the camera view stay solid (*Opacity of the window background*). Limits: the layer is not shown over games or videos in
 "exclusive" full screen, and a screen share or screenshot will include the hand.
 
 ## Actions, launcher and two-hand mode
@@ -75,8 +75,8 @@ this reliable:
 - a brief finger slip while you hold is ignored; the window is released only after the pinch really opens
   (*Settings → Clicks → Drag release delay*).
 
-**The hand is the cursor.** A hand-shaped pointer is drawn above every other window, with the fingertip exactly on the click
-point; it closes into a fist while you pinch or drag. While control is ACTIVE and your hand is seen, the Windows arrow is hidden
+**The hand is the cursor.** A round, app-style dot is drawn above every other window, centred exactly on the click point; it
+turns red and tightens while you pinch, and a dashed ring turns around it while you drag. While control is ACTIVE and your hand is seen, the Windows arrow is hidden
 so there is only one pointer on screen. It comes back **at once** on pause, emergency lock, quit, when the hand is lost, and when
 you move the physical mouse (and at the next start, if a previous run was killed). Prefer the full tracked hand, or want the arrow
 always visible? *Settings → Look → Look of the hand on screen / Hide the Windows arrow*.
@@ -99,7 +99,7 @@ npm install
 npm start
 ```
 
-1. Stand 1–3 m from the camera and **show your hand**: the badge turns green (**ACTIVE**) and the hand pointer is your cursor.
+1. Stand 1–3 m from the camera and **show your hand**: the badge turns green (**ACTIVE**) and the round dot on screen is your cursor.
 2. Not accurate? **Controls → Calibrate the movement area** (two corners, 1.5 s each).
 3. To pause: hold an **open hand still**. To stop everything: **Ctrl+Alt+K** (or the red button).
 

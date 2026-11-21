@@ -300,16 +300,14 @@ const SCHEMA = () => [
   { id: 'camera.delegate', type: 'select', label: 'Compute engine', restart: true, options: [['auto', 'Automatic (graphics card, then processor)'], ['GPU', 'Graphics card (GPU)'], ['CPU', 'Processor (CPU)']], help: 'If you see few frames per second, try changing this.' },
   { id: 'ui.hudColor', type: 'select', label: 'HUD colour', options: [['ice', 'Ice'], ['amber', 'Amber'], ['mint', 'Mint']] },
   { id: 'ui.videoDim', type: 'range', min: 0.1, max: 1, step: 0.05, label: 'Camera image brightness', fmt: (v) => Math.round(v * 100) + '%', help: 'Lower = the HUD stands out more (and less of you is shown on screen).' },
-  { id: 'ui.glass', type: 'select', label: 'Window glass effect', options: [['acrylic', 'Acrylic (see-through, blurred)'], ['mica', 'Mica (subtle)'], ['none', 'Off (solid)']], help: 'Windows 11 only.' },
-  { id: 'ui.tint', type: 'range', min: 0.1, max: 0.9, step: 0.05, label: 'Glass tint', fmt: (v) => Math.round(v * 100) + '%', help: 'Lower = more see-through. Raise it if the text is hard to read over a bright background.' },
   { id: 'ui.trail', type: 'check', label: 'Show the pointer trail' },
   { id: 'ui.handOverlay', type: 'check', label: 'Draw my hand on the screen, above every window', help: 'A transparent layer that never blocks your clicks. It also shows the hand when this window is hidden.' },
-  { id: 'ui.handStyle', type: 'select', label: 'Look of the hand on screen', options: [['pointer', 'Hand pointer (a hand-shaped cursor)'], ['skeleton', 'Full tracked hand (skeleton)']], help: 'The pointer closes into a fist while you pinch or drag.' },
+  { id: 'ui.handStyle', type: 'select', label: 'Look of the hand on screen', options: [['pointer', 'Dot (a round cursor)'], ['skeleton', 'Full tracked hand (skeleton)']], help: 'The dot turns red and shrinks while you pinch or drag.' },
   { id: 'ui.hideCursor', type: 'check', label: 'Hide the Windows arrow while the hand is the cursor', help: 'Only while control is ACTIVE and your hand is seen. It comes back at once on pause, lock, quit, when the hand is lost, or when you move the real mouse.' },
-  { id: 'ui.overlaySize', type: 'range', min: 120, max: 500, step: 10, label: 'Size of the hand pointer on screen', fmt: (v) => v + ' px' },
+  { id: 'ui.overlaySize', type: 'range', min: 120, max: 500, step: 10, label: 'Size of the cursor on screen', fmt: (v) => v + ' px' },
   { id: 'ui.overlayOpacity', type: 'range', min: 0.3, max: 1, step: 0.05, label: 'Opacity of the hand on screen', fmt: (v) => Math.round(v * 100) + '%' },
   { id: 'ui.alwaysOnTop', type: 'check', label: 'Keep this window above the other apps (it is transparent)' },
-  { id: 'ui.windowOpacity', type: 'range', min: 0.3, max: 1, step: 0.05, label: 'Opacity of this window', fmt: (v) => Math.round(v * 100) + '%', help: 'Lower = you see more of the apps under this window. 100% = solid.' },
+  { id: 'ui.windowOpacity', type: 'range', min: 0.1, max: 1, step: 0.05, label: 'Opacity of the window background', fmt: (v) => Math.round(v * 100) + '%', help: 'Lower = you see more of the apps under this window. Text, buttons and the camera view always stay solid.' },
   { id: 'ui.showSkeleton', type: 'check', label: 'Show the hand skeleton' },
   { id: 'ui.showArea', type: 'check', label: 'Show the active area' },
   { g: 'Cursor' },
@@ -419,7 +417,9 @@ function applyMirror() { $('viewport').classList.toggle('nomirror', !S.camera.mi
 function applyUi() {
   document.documentElement.dataset.hud = S.ui.hudColor;
   $('viewport').style.setProperty('--vdim', String(S.ui.videoDim));
-  document.documentElement.style.setProperty('--tint', String(S.ui.tint));
+  // see-through window: only the background fades; text, buttons and the camera view stay solid
+  const o = Number(S.ui.windowOpacity);
+  document.documentElement.style.setProperty('--tint', String(Number.isFinite(o) ? Math.min(1, Math.max(0.1, o)) : 0.55));
 }
 function setGlass(g) { document.documentElement.classList.toggle('glass', g !== 'none'); }
 

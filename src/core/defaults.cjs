@@ -2,7 +2,7 @@
 // the renderer receives them over IPC.
 
 const DEFAULTS = {
-  version: 3,            // 2 = simple mode (one hand, palm steers, starts when the hand is seen); 3 = see-through window and hand
+  version: 4,            // 2 = simple mode (one hand, palm steers, starts when the hand is seen); 4 = see-through window background
   camera: {
     deviceId: '',          // empty = default camera
     distance: 'near',      // near | mid | far  (see DISTANCE_PRESETS)
@@ -67,14 +67,12 @@ const DEFAULTS = {
     videoDim: 0.55,        // camera image brightness behind the HUD (0.1 = almost black, 1 = full)
     hudColor: 'ice',       // ice | amber | mint
     trail: true,           // fading trail behind the pointer
-    glass: 'acrylic',      // window material (Windows 11): none | mica | acrylic
-    tint: 0.32,            // darkness of the glass (lower = more see-through, higher = easier to read)
     alwaysOnTop: true,     // the window floats above the other apps (transparent, so you still see them)
     handOverlay: true,     // draw the hand on the screen, above every window (click-through)
     overlaySize: 260,      // height of the hand drawn on screen, in pixels
-    windowOpacity: 0.78,   // opacity of this window as a whole (lower = you see more of the apps under it)
-    overlayOpacity: 0.6,   // opacity of the hand drawn on screen (see-through, so it never hides what is under it)
-    handStyle: 'pointer',  // pointer = a hand-shaped cursor | skeleton = the full tracked hand
+    windowOpacity: 0.55,   // opacity of the window BACKGROUND (lower = you see more of the apps under it); text and camera stay solid
+    overlayOpacity: 0.9,   // opacity of the cursor drawn on screen
+    handStyle: 'pointer',  // pointer = a round app-style cursor (a dot) | skeleton = the full tracked hand
     hideCursor: true,      // hide the Windows arrow while the hand is the cursor (always restored when control stops)
   },
 };

@@ -507,11 +507,11 @@ setTimeout(() => { console.error('Test TIMEOUT: exiting'); try { require('../../
     fs.writeFileSync(out.replace('.png', '-hand-overlay.png'), img.toPNG());
     check('the hand layer exists, is visible and sits above the other windows', !!ov && ov.isVisible() && ov.isAlwaysOnTop(), ov ? 'always on top: ' + ov.isAlwaysOnTop() : 'missing');
     const pointerStyle = api.settings().ui.handStyle !== 'skeleton';
-    check(pointerStyle ? 'the hand pointer is drawn on the screen, its fingertip on the cursor' : 'the hand is drawn on the screen around the cursor, at about the chosen size',
-      opaque > (pointerStyle ? 200 : 500) && cur.x >= minx - 4 && cur.x <= maxx + 4 && cur.y >= miny - 4 && cur.y <= maxy + 4 && (pointerStyle ? (bh > 30 && bh < 220) : (bh > wantSize * 0.6 && bh < wantSize * 1.6)),
+    check(pointerStyle ? 'the round cursor is drawn on the screen, centred on the cursor' : 'the hand is drawn on the screen around the cursor, at about the chosen size',
+      opaque > (pointerStyle ? 150 : 500) && cur.x >= minx - 4 && cur.x <= maxx + 4 && cur.y >= miny - 4 && cur.y <= maxy + 4 && (pointerStyle ? (bh > 14 && bh < 120) : (bh > wantSize * 0.6 && bh < wantSize * 1.6)),
       'drawn box ' + (maxx - minx) + 'x' + bh + ' px, cursor at ' + Math.round(cur.x) + ',' + Math.round(cur.y) + ', wanted height ~' + wantSize);
     const wantA = api.settings().ui.overlayOpacity * 255;
-    check('the hand on screen is see-through (never more opaque than the chosen opacity)', maxA > 40 && maxA <= wantA + 8,
+    check('the cursor on screen respects the chosen opacity', maxA > 40 && maxA <= wantA + 8,
       'most opaque pixel ' + maxA + '/255, chosen opacity ' + Math.round(wantA) + '/255');
     await drive(500, () => big('pinch', 0.6, 0.5));
     fs.writeFileSync(out.replace('.png', '-hud-pinch.png'), (await api.win().webContents.capturePage()).toPNG());

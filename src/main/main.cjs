@@ -78,9 +78,10 @@ function loadSettings() {
       raw.control = { ...raw.control, pointAt: 'palm', twoHands: false };
       raw.safety = { ...raw.safety, autoActivate: true };
     }
-    if (v < 3) { // see-through look: the window and the hand pointer let you see what is under them
-      const o = Number(raw.ui && raw.ui.overlayOpacity);
-      raw.ui = { ...raw.ui, overlayOpacity: Number.isFinite(o) ? Math.min(o, DEFAULTS.ui.overlayOpacity) : DEFAULTS.ui.overlayOpacity };
+    if (v < 4) { // see-through window background; the cursor on screen keeps its usual opacity
+      const ui = raw.ui || {};
+      raw.ui = { ...ui, windowOpacity: DEFAULTS.ui.windowOpacity, overlayOpacity: v === 3 && ui.overlayOpacity === 0.6 ? DEFAULTS.ui.overlayOpacity : ui.overlayOpacity };
+      if (raw.ui.overlayOpacity === undefined) delete raw.ui.overlayOpacity;
     }
     raw.version = DEFAULTS.version;
     settings = merge(DEFAULTS, raw);
@@ -210,29 +211,22 @@ function registerHotkeys() {
 const hotkeyInfo = () => ({ kill: killKeyUsed, killOk: killKeyOk, pause: settings.safety.pauseKey, pauseOk: pauseKeyOk });
 
 // ─────────────────────────── windows ───────────────────────────
-// Glass effect (Windows 11): the window background becomes a translucent system material.
-const glassMode = () => (E2E ? 'none' : settings.ui.glass);
-function applyGlass() {
-  if (!win || win.isDestroyed()) return;
-  const g = glassMode();
-  try {
-    win.setBackgroundMaterial(g === 'none' ? 'none' : g);
-    win.setBackgroundColor(g === 'none' ? '#16181b' : '#00000000');
-  } catch { /* older Windows: no material, the opaque theme is used */ }
-  send('glass', g);
-}
+// See-through window: the window itself is transparent and the page paints a dark background with the chosen opacity
+// (Settings → Opacity of the window background). Text, buttons and the camera view stay solid. (A system "acrylic" material
+// is not used: it blurs what is behind and turns solid whenever the window is not active.) The tests use a solid window.
+const SEE_THROUGH = !E2E;
+const glassMode = () => (SEE_THROUGH ? 'clear' : 'none');
 
 function createWindow() {
   nativeTheme.themeSource = 'dark';
-  const g = glassMode();
   win = new BrowserWindow({
     width: 1180, height: 780, minWidth: 940, minHeight: 640,
     title: 'Hand Control',
     // frameless look: our own header is the title bar; Windows still draws the minimise/maximise/close buttons on top of it
     titleBarStyle: 'hidden',
     titleBarOverlay: { color: '#00000000', symbolColor: '#cfd6de', height: 46 },
-    backgroundColor: g === 'none' ? '#16181b' : '#00000000',
-    ...(g !== 'none' ? { backgroundMaterial: g } : {}),
+    transparent: SEE_THROUGH,
+    backgroundColor: SEE_THROUGH ? '#00000000' : '#16181b',
     icon: path.join(__dirname, '..', '..', 'assets', 'icon.png'),
     show: !(flag('--hidden') || E2E),
     webPreferences: {
@@ -247,7 +241,6 @@ function createWindow() {
   Menu.setApplicationMenu(null);
   win.loadURL('hc://app/index.html');
   applyTop();
-  applyOpacity();
   // The X closes the whole program like in any normal app. (The status badge, the launcher and the hand layer are windows
   // too, so "last window closed" would never happen on its own.) "Hide to tray" is a separate button.
   win.on('close', () => { quitting = true; app.quit(); });
@@ -323,14 +316,6 @@ function syncHandOverlay() {
 function applyTop() {
   if (win && !win.isDestroyed()) win.setAlwaysOnTop(!!settings.ui.alwaysOnTop, 'floating');
 }
-// the main window is see-through as a whole (text and camera too), so the apps under it stay visible. This works whether or
-// not the window has the focus (the glass material alone turns solid when the window is not active).
-function applyOpacity() {
-  if (!win || win.isDestroyed()) return;
-  const o = Number(settings.ui.windowOpacity);
-  win.setOpacity(E2E ? 1 : Math.min(1, Math.max(0.3, Number.isFinite(o) ? o : 1)));
-}
-
 function createOverlay() {
   const wa = screen.getPrimaryDisplay().workArea;
   const W = 300, H = 64;
@@ -421,9 +406,7 @@ function wireIpc() {
     input.realMouseWins = settings.safety.realMouseWins;
     if (settings.safety.killKey !== before.safety.killKey || settings.safety.pauseKey !== before.safety.pauseKey) registerHotkeys();
     if (settings.control.display !== before.control.display) applyScreen();
-    if (settings.ui.glass !== before.ui.glass) applyGlass();
     if (settings.ui.alwaysOnTop !== before.ui.alwaysOnTop) applyTop();
-    if (settings.ui.windowOpacity !== before.ui.windowOpacity) applyOpacity();
     if (settings.ui.handOverlay !== before.ui.handOverlay || settings.control.display !== before.control.display || settings.ui.overlaySize !== before.ui.overlaySize || settings.ui.overlayOpacity !== before.ui.overlayOpacity || settings.ui.hudColor !== before.ui.hudColor || settings.ui.trail !== before.ui.trail || settings.camera.mirror !== before.camera.mirror || settings.ui.handStyle !== before.ui.handStyle) syncHandOverlay();
     syncArrow();
     send('settings', settings);

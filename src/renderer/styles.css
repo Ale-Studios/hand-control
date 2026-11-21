@@ -28,7 +28,7 @@ html, body { margin: 0; height: 100%; color: var(--txt); font: 13.5px/1.45 "Sego
 body { display: flex; flex-direction: column; overflow: hidden; background: radial-gradient(1100px 560px at 75% -15%, #252a31 0%, var(--bg) 62%); }
 /* with the glass effect on, the window itself is translucent */
 html.glass body { background: linear-gradient(180deg, rgba(18, 20, 24, var(--tint)), rgba(12, 14, 17, calc(var(--tint) * 1.15))); }
-html.glass { --panel-a: calc(var(--tint) * .8); }
+html.glass { --panel-a: calc(var(--tint) * .35); }
 /* with the glass effect on, buttons are see-through too: only a thin silver outline and a light tint */
 html.glass .btn { background: rgba(255, 255, 255, .035); border-color: rgba(255, 255, 255, .22); }
 html.glass .btn:hover { background: rgba(255, 255, 255, .1); }
