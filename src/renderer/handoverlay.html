@@ -81,6 +81,39 @@ function drawHand(lm, au, av, cx, cy, strong, aspect, col) {
   return pts;
 }
 
+/**
+ * The hand as a mouse pointer. (cx, cy) is the hot spot: the fingertip of the pointing hand, or the centre of the fist while
+ * grabbing. open = pointing hand (index up) | grab = closed fist.
+ */
+function drawPointer(cx, cy, grab, active, col, scale, glow) {
+  const rr = (x, y, w, h, r) => { ctx.beginPath(); ctx.roundRect(x, y, w, h, r); };
+  const shapes = grab
+    ? [[-17, -12, 34, 26, 9], [-17, -17, 8, 12, 4], [-8.5, -19, 8, 13, 4], [0, -19, 8, 13, 4], [8.5, -17, 8, 12, 4], [-15, 1, 24, 9, 4.5]]
+    : [[-5, 0, 10, 23, 5], [-13, 14, 33, 31, 10], [-19, 25, 12, 12, 6], [5, 13, 7.5, 14, 3.7], [11.5, 14.5, 7.5, 15, 3.7], [18, 17, 7, 14, 3.5]];
+  ctx.save();
+  ctx.translate(cx, cy); ctx.scale(scale, scale);
+  if (!grab) ctx.rotate(-0.3); // leans like the classic arrow, so it reads as "this point"
+  ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+  // 1) dark casing (readable on white backgrounds)
+  ctx.strokeStyle = 'rgba(8, 12, 18, 0.88)'; ctx.lineWidth = 4;
+  for (const s of shapes) { rr(...s); ctx.stroke(); }
+  // 2) metallic fill, with a soft glow in the state colour
+  ctx.shadowColor = glow; ctx.shadowBlur = 12;
+  ctx.fillStyle = active ? (grab ? '#ffd7d2' : '#eef2f6') : 'rgba(205, 212, 220, 0.78)';
+  for (const s of shapes) { rr(...s); ctx.fill(); }
+  ctx.shadowBlur = 0;
+  // 3) thin lines between the folded fingers
+  ctx.strokeStyle = 'rgba(30, 38, 48, 0.55)'; ctx.lineWidth = 1.3;
+  ctx.beginPath();
+  if (grab) { for (const x of [-8.7, -0.2, 8.3]) { ctx.moveTo(x, -17); ctx.lineTo(x, -4); } }
+  else { for (const [x, y] of [[5.2, 20], [11.7, 21.5], [18.2, 24]]) { ctx.moveTo(x, y); ctx.lineTo(x, y + 9); } }
+  ctx.stroke();
+  // 4) coloured edge
+  ctx.strokeStyle = glow; ctx.lineWidth = 1.4; ctx.globalAlpha *= 0.9;
+  for (const s of shapes) { rr(...s); ctx.stroke(); }
+  ctx.restore();
+}
+
 function draw() {
   ctx.clearRect(0, 0, innerWidth, innerHeight);
   ctx.globalAlpha = cfg.opacity;
@@ -91,9 +124,41 @@ function draw() {
   const now = performance.now();
   spin += 0.05;
 
-  // steering hand: its pointing point sits on the cursor
   const steer = f.hands[H.steerIndex >= 0 ? H.steerIndex : 0];
   const cx = H.screen.x * innerWidth, cy = H.screen.y * innerHeight;
+
+  if (cfg.style !== 'skeleton') {
+    // the hand IS the pointer: a hand-shaped cursor, a fist while pinching/dragging
+    const scale = Math.max(0.6, cfg.size / 260) * 1.15;
+    if (cfg.trail) {
+      trail.push({ x: cx, y: cy, t: now });
+      while (trail.length && now - trail[0].t > TRAIL_MS) trail.shift();
+      for (let i = 1; i < trail.length; i++) {
+        const age = (now - trail[i].t) / TRAIL_MS;
+        ctx.strokeStyle = hexA(col[1], Math.max(0, 0.55 * (1 - age))); ctx.lineWidth = Math.max(0.6, (1 - age) * 3);
+        ctx.beginPath(); ctx.moveTo(trail[i - 1].x, trail[i - 1].y); ctx.lineTo(trail[i].x, trail[i].y); ctx.stroke();
+      }
+    } else trail = [];
+    if (f.helper && f.helper.screen) drawPointer(f.helper.screen.x * innerWidth, f.helper.screen.y * innerHeight, H.helperPose === 'pinch', false, col, scale * 0.7, col[1]);
+    const grab = !!H.pressed;
+    const active = H.mode === 'active';
+    const glow = grab ? '#ff7a75' : active ? '#3ddc97' : col[1];
+    if (grab) { // soft disc while grabbing; it grows once the drag has started
+      ctx.fillStyle = hexA('#ff7a75', H.dragging ? 0.26 : 0.18);
+      ctx.beginPath(); ctx.arc(cx, cy, (H.dragging ? 32 : 26) * scale, 0, Math.PI * 2); ctx.fill();
+    }
+    drawPointer(cx, cy, grab, active, col, scale, glow);
+    if (H.dragging || (!active && H.poseName)) {
+      ctx.font = '11px "Cascadia Mono", Consolas, monospace'; ctx.textAlign = 'left';
+      ctx.shadowColor = 'rgba(0, 0, 0, 0.9)'; ctx.shadowBlur = 4; ctx.fillStyle = hexA(col[0], 1);
+      ctx.fillText(H.dragging ? 'DRAGGING' : String(f.hud.poseName).toUpperCase(), cx + 26 * scale, cy + 52 * scale);
+      ctx.shadowBlur = 0;
+    }
+    ctx.globalAlpha = 1;
+    return;
+  }
+
+  // steering hand: its pointing point sits on the cursor
   let pts = null;
   if (steer && H.anchor) pts = drawHand(steer, H.anchor.u, H.anchor.v, cx, cy, true, aspect, col);
 

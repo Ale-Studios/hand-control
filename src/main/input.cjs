@@ -27,6 +27,13 @@ const GetCursorPos = user32.func('bool GetCursorPos(_Out_ POINT *p)');
 const GetSystemMetrics = user32.func('int GetSystemMetrics(int n)');
 const GetAsyncKeyState = user32.func('short GetAsyncKeyState(int vKey)');
 const GetDoubleClickTime = user32.func('unsigned int GetDoubleClickTime()');
+// hide / restore the Windows arrow (see Input.hideSystemCursor)
+const CreateCursor = user32.func('void *CreateCursor(void *hInst, int xHot, int yHot, int w, int h, const void *andMask, const void *xorMask)');
+const SetSystemCursor = user32.func('bool SetSystemCursor(void *hcur, unsigned int id)');
+const SystemParametersInfoW = user32.func('bool SystemParametersInfoW(unsigned int action, unsigned int param, void *pv, unsigned int ini)');
+const SPI_SETCURSORS = 0x0057;
+// arrow, I-beam, wait, cross, up, the four resize cursors, move, "no", hand, "working in background", help
+const SYSTEM_CURSOR_IDS = [32512, 32513, 32514, 32515, 32516, 32642, 32643, 32644, 32645, 32646, 32648, 32649, 32650, 32651];
 
 const MOUSEEVENTF = {
   MOVE: 0x0001, LEFTDOWN: 0x0002, LEFTUP: 0x0004, RIGHTDOWN: 0x0008, RIGHTUP: 0x0010,
@@ -83,6 +90,33 @@ class Input {
 
   /** Target screen rectangle in physical pixels {x,y,w,h}. */
   setScreenRect(r) { this.screen = r; }
+
+  /**
+   * Hides the Windows arrow by swapping the system cursors for a fully transparent one (the on-screen hand takes its place).
+   * It is ALWAYS undone by showSystemCursor(): Windows reloads the user's own cursor scheme (SPI_SETCURSORS). Callers restore it
+   * whenever control is not active, on quit, and once at startup in case a previous run was killed while the arrow was hidden.
+   */
+  hideSystemCursor() {
+    if (this.cursorHidden) return true;
+    try {
+      const andMask = Buffer.alloc(128, 0xff); // 32×32 mono: AND = 1, XOR = 0 → every pixel stays as the background
+      const xorMask = Buffer.alloc(128, 0x00);
+      for (const id of SYSTEM_CURSOR_IDS) {
+        const h = CreateCursor(null, 0, 0, 32, 32, andMask, xorMask);
+        if (h) SetSystemCursor(h, id); // Windows takes ownership of the cursor handle
+      }
+      this.cursorHidden = true;
+      return true;
+    } catch { this.showSystemCursor(); return false; }
+  }
+
+  showSystemCursor() {
+    try { SystemParametersInfoW(SPI_SETCURSORS, 0, null, 0); } catch { /* nothing else to do */ }
+    this.cursorHidden = false;
+  }
+
+  /** true while the physical mouse has been used recently (control gives way, the arrow must be visible again). */
+  suspended(now = Date.now()) { return now < this.suspendUntil; }
 
   virtual() {
     return {

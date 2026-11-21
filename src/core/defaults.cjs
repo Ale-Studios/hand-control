@@ -71,6 +71,8 @@ const DEFAULTS = {
     handOverlay: true,     // draw the hand on the screen, above every window (click-through)
     overlaySize: 260,      // height of the hand drawn on screen, in pixels
     overlayOpacity: 0.9,   // opacity of the hand drawn on screen
+    handStyle: 'pointer',  // pointer = a hand-shaped cursor | skeleton = the full tracked hand
+    hideCursor: true,      // hide the Windows arrow while the hand is the cursor (always restored when control stops)
   },
 };
 

@@ -228,6 +228,8 @@ setTimeout(() => { console.error('Test TIMEOUT: exiting'); try { require('../../
   console.log('  · step 10: emergency');
   // 10) EMERGENCY SWITCH from the keyboard, even with a button held
   if (want('kill')) {
+  // sends the emergency shortcut that is REALLY registered (another app, e.g. one that owns Ctrl+Alt+K, makes the app use Ctrl+Alt+Shift+K)
+  const sendKill = () => { const sh = /Shift/.test(api.hotkeys().kill); input.key(0x11, true); input.key(0x12, true); if (sh) input.key(0x10, true); input.key(0x4b, true); input.key(0x4b, false); if (sh) input.key(0x10, false); input.key(0x12, false); input.key(0x11, false); };
   await ensureActive();
   await drive(500, () => hand('point', 0.5, 0.5));
   m0 = mark();
@@ -235,7 +237,7 @@ setTimeout(() => { console.error('Test TIMEOUT: exiting'); try { require('../../
   await sleep(900);
   const pressedBefore = since(m0).some((e) => e.type === 'mousedown') && !since(m0).some((e) => e.type === 'mouseup') && input.isDown(1);
   const tKill = api.nowMs(); console.log('  · sending Ctrl+Alt+K');
-  input.key(0x11, true); input.key(0x12, true); input.key(0x4b, true); input.key(0x4b, false); input.key(0x12, false); input.key(0x11, false);
+  sendKill();
   console.log('  · keys sent');
   const lockedOk = await waitMode('locked', 1200);
   const tLocked = modeLog.filter((x) => x.m === 'locked').pop()?.t;
@@ -252,7 +254,7 @@ setTimeout(() => { console.error('Test TIMEOUT: exiting'); try { require('../../
   check('while LOCKED the hand moves nothing', near(cursor(), cK, 2) && !since(m0).some((e) => e.type === 'mousedown'));
   await drive(2600, () => hand('open'));
   check('while LOCKED an open hand does NOT unlock', api.mode === 'locked');
-  input.key(0x11, true); input.key(0x12, true); input.key(0x4b, true); input.key(0x4b, false); input.key(0x12, false); input.key(0x11, false);
+  sendKill();
   check('Ctrl+Alt+K again unlocks (into PAUSED, not active)', await waitMode('paused', 1200));
   }
   if (ALL) {
@@ -352,6 +354,35 @@ setTimeout(() => { console.error('Test TIMEOUT: exiting'); try { require('../../
   await sleep(200);
   api.actions.closeLauncher();
   }
+  if (want('arrow') || ALL) {
+  // 12b) the hand is the cursor: the Windows arrow is hidden only while control is ACTIVE and the hand is seen
+  await ensureActive();
+  api.setArrowTest(true);
+  // how many pixels the system arrow would draw right now (0 = invisible): a fresh PowerShell draws Cursors.Arrow on white
+  const { execFileSync } = require('child_process');
+  const PS = "Add-Type -AssemblyName System.Windows.Forms,System.Drawing; $b=New-Object System.Drawing.Bitmap 32,32; $g=[System.Drawing.Graphics]::FromImage($b); $g.Clear([System.Drawing.Color]::White); [System.Windows.Forms.Cursors]::Arrow.Draw($g,(New-Object System.Drawing.Rectangle 0,0,32,32)); $n=0; for($y=0;$y -lt 32;$y++){for($x=0;$x -lt 32;$x++){ if($b.GetPixel($x,$y).ToArgb() -ne -1){$n++} }}; $n";
+  const arrowPx = () => { try { return parseInt(execFileSync('powershell.exe', ['-NoProfile', '-Command', PS], { timeout: 15000 }).toString().trim(), 10); } catch { return -1; } };
+  await drive(700, () => null); await sleep(600);
+  const px0 = arrowPx();
+  check('no hand in view: the Windows arrow stays visible', !input.cursorHidden);
+  await drive(1200, () => hand('point', 0.5, 0.5));
+  await sleep(100);
+  check('hand seen while ACTIVE: the Windows arrow is hidden (the on-screen hand is the cursor)', input.cursorHidden && px0 > 20 && arrowPx() === 0, 'arrow pixels ' + px0 + ' -> hidden');
+  api.setMode('paused', 'test', 'ui');
+  check('PAUSED: the arrow comes back at once (the original arrow is drawn again)', !input.cursorHidden && arrowPx() === px0, 'arrow pixels back to ' + px0);
+  await ensureActive();
+  await drive(800, () => hand('point', 0.5, 0.5)); await sleep(100);
+  check('…and is hidden again after re-activating', input.cursorHidden);
+  await drive(600, () => null); await sleep(700);
+  check('hand lost: the arrow comes back by itself', !input.cursorHidden);
+  await drive(800, () => hand('point', 0.5, 0.5)); await sleep(100);
+  api.setMode('locked', 'test', 'hotkey');
+  check('EMERGENCY LOCK: the arrow comes back at once', !input.cursorHidden);
+  api.setMode('paused', 'test', 'ui');
+  api.setArrowTest(false);
+  check('…and the arrow is visible at the end of the test', !input.cursorHidden);
+  await ensureActive();
+  }
   if (want('windrag') || ALL) {
   // 12c) a real WINDOW drag: grab a title bar with a pinch, carry it, drop it (the window lives in another process)
   await ensureActive();
@@ -422,8 +453,9 @@ setTimeout(() => { console.error('Test TIMEOUT: exiting'); try { require('../../
     const cur = { x: 0.6 * sz.width, y: 0.45 * sz.height };
     fs.writeFileSync(out.replace('.png', '-hand-overlay.png'), img.toPNG());
     check('the hand layer exists, is visible and sits above the other windows', !!ov && ov.isVisible() && ov.isAlwaysOnTop(), ov ? 'always on top: ' + ov.isAlwaysOnTop() : 'missing');
-    check('the hand is drawn on the screen around the cursor, at about the chosen size',
-      opaque > 500 && cur.x >= minx && cur.x <= maxx && cur.y >= miny && cur.y <= maxy && bh > wantSize * 0.6 && bh < wantSize * 1.6,
+    const pointerStyle = api.settings().ui.handStyle !== 'skeleton';
+    check(pointerStyle ? 'the hand pointer is drawn on the screen, its fingertip on the cursor' : 'the hand is drawn on the screen around the cursor, at about the chosen size',
+      opaque > (pointerStyle ? 200 : 500) && cur.x >= minx - 4 && cur.x <= maxx + 4 && cur.y >= miny - 4 && cur.y <= maxy + 4 && (pointerStyle ? (bh > 30 && bh < 220) : (bh > wantSize * 0.6 && bh < wantSize * 1.6)),
       'drawn box ' + (maxx - minx) + 'x' + bh + ' px, cursor at ' + Math.round(cur.x) + ',' + Math.round(cur.y) + ', wanted height ~' + wantSize);
     await drive(500, () => big('pinch', 0.6, 0.5));
     fs.writeFileSync(out.replace('.png', '-hud-pinch.png'), (await api.win().webContents.capturePage()).toPNG());

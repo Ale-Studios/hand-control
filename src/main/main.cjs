@@ -160,7 +160,7 @@ function setMode(next, reason, source = 'ui') {
     if (next === 'active') next = 'paused';
   }
   mode = next;
-  if (mode !== 'active') { input.releaseAll(); actions.closeLauncher(); }
+  if (mode !== 'active') { input.releaseAll(); actions.closeLauncher(); syncArrow(); }
   addLog(`Mode: ${label(mode)} — ${reason || source}`);
   send('mode', { mode, reason, source });
   refreshTray();
@@ -229,7 +229,9 @@ function createWindow() {
   Menu.setApplicationMenu(null);
   win.loadURL('hc://app/index.html');
   applyTop();
-  win.on('close', () => { quitting = true; });
+  // The X closes the whole program like in any normal app. (The status badge, the launcher and the hand layer are windows
+  // too, so "last window closed" would never happen on its own.) "Hide to tray" is a separate button.
+  win.on('close', () => { quitting = true; app.quit(); });
   win.on('closed', () => { win = null; });
   if (flag('--dev')) win.webContents.openDevTools({ mode: 'detach' });
   if (E2E || BENCH || flag('--verbose')) {
@@ -252,7 +254,17 @@ function controlledDisplayBounds() {
   return (all[settings.control.display] || screen.getPrimaryDisplay()).bounds; // DIP
 }
 function handOverlayConfig() {
-  return { size: settings.ui.overlaySize, opacity: settings.ui.overlayOpacity, color: settings.ui.hudColor, mirror: settings.camera.mirror, trail: settings.ui.trail };
+  return { size: settings.ui.overlaySize, opacity: settings.ui.overlayOpacity, color: settings.ui.hudColor, mirror: settings.camera.mirror, trail: settings.ui.trail, style: settings.ui.handStyle };
+}
+// The hand IS the cursor: the Windows arrow is hidden only while that is really true (control ACTIVE, hand seen, hand layer
+// visible, not in test mode, physical mouse not in use). In every other case — pause, lock, hand lost, quit, crash recovery at
+// the next start — the arrow is shown again, so you are never left without a pointer.
+let arrowForce = false; // tests switch it on by hand
+function syncArrow() {
+  const want = (!E2E || arrowForce) && !!settings.ui.hideCursor && mode === 'active' && !settings.safety.dryRun && handSeen
+    && !!handOv && !handOv.isDestroyed() && handOv.isVisible() && !input.suspended();
+  if (want && !input.cursorHidden) input.hideSystemCursor();
+  else if (!want && input.cursorHidden) input.showSystemCursor();
 }
 function syncHandOverlay() {
   const want = handOverlayWanted();
@@ -385,7 +397,8 @@ function wireIpc() {
     if (settings.control.display !== before.control.display) applyScreen();
     if (settings.ui.glass !== before.ui.glass) applyGlass();
     if (settings.ui.alwaysOnTop !== before.ui.alwaysOnTop) applyTop();
-    if (settings.ui.handOverlay !== before.ui.handOverlay || settings.control.display !== before.control.display || settings.ui.overlaySize !== before.ui.overlaySize || settings.ui.overlayOpacity !== before.ui.overlayOpacity || settings.ui.hudColor !== before.ui.hudColor || settings.ui.trail !== before.ui.trail || settings.camera.mirror !== before.camera.mirror) syncHandOverlay();
+    if (settings.ui.handOverlay !== before.ui.handOverlay || settings.control.display !== before.control.display || settings.ui.overlaySize !== before.ui.overlaySize || settings.ui.overlayOpacity !== before.ui.overlayOpacity || settings.ui.hudColor !== before.ui.hudColor || settings.ui.trail !== before.ui.trail || settings.camera.mirror !== before.camera.mirror || settings.ui.handStyle !== before.ui.handStyle) syncHandOverlay();
+    syncArrow();
     send('settings', settings);
     return settings;
   });
@@ -510,6 +523,9 @@ if (!gotLock) {
     if (!E2E) createTray();
     registerHotkeys();
     startWatchdog();
+    if (!E2E) input.showSystemCursor(); // a previous run may have been killed while the arrow was hidden
+    setInterval(syncArrow, 250);
+    process.on('exit', () => { try { input.showSystemCursor(); } catch { /* ok */ } });
     if (BENCH) {
       setTimeout(() => app.getGPUInfo('basic')
         .then((i) => console.log('[gpu] ' + JSON.stringify((i.gpuDevice || []).map((d) => ({ name: d.deviceString, active: !!d.active })))))
@@ -520,6 +536,7 @@ if (!gotLock) {
     Object.defineProperty(api, 'mode', { get: () => mode, enumerable: true });
     Object.assign(api, {
       handOverlay: () => handOv, setHandOverlay: (on) => { handOvForce = !!on; syncHandOverlay(); },
+      setArrowTest: (on) => { arrowForce = !!on; syncArrow(); }, syncArrow,
       setMode, input, actions, settings: () => settings, setSettings: (p) => { settings = merge(settings, p); send('settings', settings); },
       win: () => win, overlay: () => overlay, send, hotkeys: hotkeyInfo, blocked: () => blockedRequests,
       nowMs, userData: () => app.getPath('userData'), cameraState: () => cameraState, handSeen: () => handSeen,
@@ -531,6 +548,7 @@ if (!gotLock) {
   app.on('before-quit', () => { quitting = true; });
   app.on('will-quit', () => {
     try { input.releaseAll(); } catch { /* already released */ }
+    try { input.showSystemCursor(); } catch { /* ok */ }
     globalShortcut.unregisterAll();
   });
 }

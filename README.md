@@ -71,7 +71,14 @@ this reliable:
 - a brief finger slip while you hold is ignored; the window is released only after the pinch really opens
   (*Settings → Clicks → Drag release delay*).
 
-The on-screen hand is your cursor: it is drawn above every other window, while the real Windows cursor stays visible for now.
+**The hand is the cursor.** A hand-shaped pointer is drawn above every other window, with the fingertip exactly on the click
+point; it closes into a fist while you pinch or drag. While control is ACTIVE and your hand is seen, the Windows arrow is hidden
+so there is only one pointer on screen. It comes back **at once** on pause, emergency lock, quit, when the hand is lost, and when
+you move the physical mouse (and at the next start, if a previous run was killed). Prefer the full tracked hand, or want the arrow
+always visible? *Settings → Look → Look of the hand on screen / Hide the Windows arrow*.
+
+**Closing.** The **X** of the window quits the whole program (control stops, the camera turns off). *Hide to tray* is a separate
+button for keeping control running with the window out of the way.
 
 **Cursor point.** *Settings → Cursor → Point that moves the cursor*: index knuckle (steady), **centre of the palm** (steadiest: it does
 not move when the fingers do) or index fingertip (most natural).
