@@ -65,6 +65,7 @@ setTimeout(() => { console.error('Test TIMEOUT: exiting'); try { require('../../
   // ── log of what the app sends to the mouse (for timing) ──
   const injected = [];
   api.on('input', (m, done, tMain) => injected.push({ ...m, done, tMain }));
+  api.setSettings({ control: { pointAt: 'knuckle' }, actions: { fist: 'none' } });
   const modeLog = [];
   api.on('mode', (m, reason, source) => modeLog.push({ m, reason, source, t: api.nowMs() }));
 
@@ -259,11 +260,11 @@ setTimeout(() => { console.error('Test TIMEOUT: exiting'); try { require('../../
   }
   if (ALL) {
 
-  // 11) closed fist = emergency lock by gesture
+  // 11) the closed fist is an action now, never a lock (the action itself is tested in the 'fist' section)
   await drive(2300, () => hand('open')); await waitMode('active');
   await drive(300, () => hand('point'));
   await drive(1400, () => hand('fist'));
-  check('closed fist held still ~1 s LOCKS', await waitMode('locked', 1000));
+  check('closed fist held still does NOT lock', api.mode === 'active');
   api.setMode('paused', 'test', 'ui');
 
   // 12) auto-pause when the hand disappears
@@ -382,6 +383,57 @@ setTimeout(() => { console.error('Test TIMEOUT: exiting'); try { require('../../
   api.setArrowTest(false);
   check('…and the arrow is visible at the end of the test', !input.cursorHidden);
   await ensureActive();
+  }
+  if (want('fist') || ALL) {
+  // 12d) closed fist held still = minimise the window under the cursor (a real window of another process)
+  await ensureActive();
+  api.setSettings({ actions: { fist: 'window:minimize', fistHoldMs: 600 } });
+  const { spawn } = require('child_process');
+  const koffi = require('koffi');
+  const u32 = koffi.load('user32.dll');
+  const FindWindowW = u32.func('void *FindWindowW(void *cls, str16 name)');
+  const IsIconic = u32.func('bool IsIconic(void *h)');
+  const childEnv = { ...process.env }; delete childEnv.ELECTRON_RUN_AS_NODE;
+  const child = spawn(process.execPath, [path.join(__dirname, 'dragwin.cjs')], { env: childEnv, stdio: ['ignore', 'pipe', 'pipe'] });
+  let bounds = null;
+  child.stdout.on('data', (d) => { for (const l of String(d).split(/\r?\n/)) if (l.startsWith('BOUNDS ')) bounds = JSON.parse(l.slice(7)); });
+  for (let i = 0; i < 100 && !bounds; i++) await sleep(100);
+  await sleep(600);
+  if (!bounds) { check('fist: the test window started', false, 'no BOUNDS line from the child'); }
+  else {
+    const pt = screen.dipToScreenPoint({ x: bounds.x + 190, y: bounds.y + 120 });
+    const sx = pt.x / (input.screen.w - 1), sy = pt.y / (input.screen.h - 1);
+    const hw = () => FindWindowW(null, 'HC dragwin');
+    check('the test window can be found', !!hw());
+    await drive(1100, () => hand('point', sx, sy)); await sleep(100);
+    check('the cursor is over the test window', near(cursor(), pt, 8), 'cursor ' + cursor().x + ',' + cursor().y);
+    await drive(250, () => hand('fist', sx, sy));
+    await sleep(100);
+    check('a fist held for a moment is not enough yet', !IsIconic(hw()));
+    await drive(1000, () => hand('fist', sx, sy)); await sleep(500);
+    check('a fist held still MINIMISES the window under the cursor', !!hw() && IsIconic(hw()));
+    check('…and control stays ACTIVE (a fist is not a lock)', api.mode === 'active');
+    // the desktop / taskbar is never touched: nothing is under the cursor at the very bottom edge of the screen
+  }
+  try { child.kill(); } catch { /* ok */ }
+  api.setSettings({ actions: { fist: 'none' } });
+  await sleep(300);
+  }
+  if (want('auto') || ALL) {
+  // 12e) simple mode: control starts by itself when the hand is first seen (once per start; after an automatic pause again)
+  api.setMode('paused', 'test', 'ui');
+  await drive(500, () => null);
+  await drive(700, () => hand('point'));
+  check('without arming nothing starts by itself', api.mode === 'paused');
+  await drive(600, () => null); await sleep(200);
+  api.armAuto();
+  await drive(700, () => hand('point'));
+  await sleep(100);
+  check('simple mode: control becomes ACTIVE as soon as the hand is seen', api.mode === 'active');
+  api.setMode('paused', 'paused on purpose', 'ui');
+  await drive(500, () => null);
+  await drive(700, () => hand('point'));
+  check('a pause YOU asked for is not undone by itself (only the open hand wakes it)', api.mode === 'paused');
   }
   if (want('windrag') || ALL) {
   // 12c) a real WINDOW drag: grab a title bar with a pinch, carry it, drop it (the window lives in another process)

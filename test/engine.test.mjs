@@ -110,20 +110,40 @@ test('waving with an open hand activates nothing', () => {
   assert.equal(eng.mode, 'paused');
 });
 
-test('closed fist = emergency lock, and once locked gestures do nothing', () => {
+test('closed fist held still = the fist action (once), and it does NOT lock', () => {
   const { eng, events } = setup();
   eng.setMode('active');
-  const t = run(eng, 0, 1300, () => makeHand({ pose: 'fist' }));
-  assert.equal(eng.mode, 'locked');
+  let t = run(eng, 0, 400, () => makeHand({ pose: 'fist' }));
+  assert.equal(events.filter((e) => e.type === 'action').length, 0, 'not yet: the fist must be held');
+  t = run(eng, t, 1500, () => makeHand({ pose: 'fist' }));
+  assert.deepEqual(events.filter((e) => e.type === 'action').map((e) => e.which), ['fist'], 'fires once however long it is held');
+  assert.equal(eng.mode, 'active', 'a fist is no longer an emergency lock');
+  assert.equal(events.filter((e) => e.type === 'mode-request').length, 0);
+});
+
+test('fist action: not while moving, not while paused', () => {
+  const a = setup();
+  a.eng.setMode('active');
+  run(a.eng, 0, 3000, (ms) => makeHand({ pose: 'fist', at: { x: 0.3 + 0.3 * Math.abs(Math.sin(ms / 300)), y: 0.5 } }));
+  assert.equal(a.events.filter((e) => e.type === 'action').length, 0, 'a waving fist does nothing');
+  const b = setup();
+  run(b.eng, 0, 2000, () => makeHand({ pose: 'fist' }));
+  assert.equal(b.events.filter((e) => e.type === 'action').length, 0, 'paused: nothing');
+});
+
+test('once LOCKED gestures do nothing and an open hand does not unlock', () => {
+  const { eng, events } = setup();
+  eng.setMode('locked');
   events.length = 0;
-  let t2 = run(eng, t, 2500, () => makeHand({ pose: 'open' }));
+  let t2 = run(eng, 0, 2500, () => makeHand({ pose: 'open' }));
   assert.equal(eng.mode, 'locked', 'an open hand does NOT unlock');
-  run(eng, t2, 1000, () => makeHand({ pose: 'point', at: CENTER }));
-  assert.equal(events.filter((e) => e.type === 'move').length, 0);
+  run(eng, t2, 1500, () => makeHand({ pose: 'fist' }));
+  run(eng, t2 + 1500, 1000, () => makeHand({ pose: 'point', at: CENTER }));
+  assert.equal(events.filter((e) => e.type === 'move' || e.type === 'action').length, 0);
 });
 
 test('index finger up: the cursor goes where you point (mirrored) and reaches centre and corners', () => {
-  const { eng, events } = setup();
+  const { eng, events } = setup({ control: { pointAt: 'knuckle' } }); // the synthetic hands are placed by the knuckle
   eng.setMode('active');
   run(eng, 0, 1500, () => makeHand({ pose: 'point', at: { x: 0.5, y: 0.5 } }));
   let last = [...events].reverse().find((e) => e.type === 'move');
@@ -135,7 +155,7 @@ test('index finger up: the cursor goes where you point (mirrored) and reaches ce
 });
 
 test('pinch = click: cursor still at the point, down then up', () => {
-  const { eng, events } = setup();
+  const { eng, events } = setup({ control: { pointAt: 'knuckle' } });
   eng.setMode('active');
   let t = run(eng, 0, 800, () => makeHand({ pose: 'point', at: CENTER }));
   events.length = 0;
@@ -329,11 +349,12 @@ test('two-hand mode: helper pinch held while steering = drag; helper V = scroll;
 });
 
 test('two-hand mode: a fist or an open hand on the helper hand does nothing', () => {
-  const { eng } = setup({ control: { twoHands: true, cursorHand: 'right' } });
+  const { eng, events } = setup({ control: { twoHands: true, cursorHand: 'right' } });
   eng.setMode('active');
   const R = makeHand({ pose: 'point', at: { x: 0.35, y: 0.5 }, label: 'right' });
   runHands(eng, 0, 2500, () => [R, makeHand({ pose: 'fist', at: { x: 0.75, y: 0.5 }, label: 'left' })]);
-  assert.equal(eng.mode, 'active', 'no lock from the helper fist');
+  assert.equal(eng.mode, 'active', 'no mode change from the helper fist');
+  assert.equal(events.filter((e) => e.type === 'action').length, 0, 'no fist action from the helper hand');
 });
 
 test('two-hand mode: if the helper hand disappears while holding the button, it is released', () => {

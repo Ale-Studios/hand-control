@@ -7,11 +7,11 @@ const path = require('path');
 app.setPath('userData', process.env.DRAGWIN_DATA || path.join(require('os').tmpdir(), 'hc-dragwin-' + process.pid));
 app.whenReady().then(() => {
   const w = new BrowserWindow({
-    x: 500, y: 300, width: 380, height: 240, frame: false, alwaysOnTop: true, skipTaskbar: true, show: false,
+    title: 'HC dragwin', x: 500, y: 300, width: 380, height: 240, frame: false, alwaysOnTop: true, skipTaskbar: true, show: false,
     webPreferences: { sandbox: true },
   });
   w.setAlwaysOnTop(true, 'screen-saver');
-  const html = '<body style="margin:0;background:#1a2230;color:#cfd6de;font:16px Segoe UI;user-select:none">'
+  const html = '<title>HC dragwin</title><body style="margin:0;background:#1a2230;color:#cfd6de;font:16px Segoe UI;user-select:none">'
     + '<div style="height:64px;background:#33415a;-webkit-app-region:drag;display:flex;align-items:center;padding-left:16px">title bar (drag me)</div>'
     + '<div style="padding:16px">test window</div></body>';
   const out = () => console.log('BOUNDS ' + JSON.stringify(w.getBounds()));

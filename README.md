@@ -3,6 +3,9 @@
 Control your PC **with your hands**, without touching a mouse or keyboard, even from a few metres away.
 A camera watches your hand; **everything stays on your PC** (no internet, no cloud, no recordings).
 
+**Simple by default:** show one hand and it just works — your hand is the cursor, a pinch clicks and drags, a fist minimises a window.
+The two-hand mode and the fine-tuning settings are still there, under *Settings → Show advanced settings*.
+
 > Status: **MVP (v0.1)**. Tested with synthetic "fake hands" along the whole chain down to the real mouse
 > (27 automatic checks passed, ~3 ms of software delay) and with a real camera (local engine on the GPU: 25 ms per frame).
 > Accuracy with a **real** hand, especially at 2–3 m, still has to be measured: see [docs/MEASUREMENTS.md](docs/MEASUREMENTS.md).
@@ -11,15 +14,15 @@ A camera watches your hand; **everything stays on your PC** (no internet, no clo
 
 | Gesture | What happens |
 |---|---|
-| ☝️ **Index finger up** | moves the cursor (with jitter smoothing) |
+| 🖐️ **Your hand** | moves the cursor: the centre of the palm steers it (with jitter smoothing). The hand pointer on screen **is** the cursor |
 | 🤏 **Pinch thumb + index** | left click · held and moved = drag · two pinches = double click |
 | 🤏 **Pinch thumb + middle** | right click |
 | ✌️ **Index + middle up** | scroll: move your hand up/down |
 | 🤏 **Thumb + ring finger, held ½ s** (index up) | **action 1**: by default the launcher (big tiles) |
 | 🤏 **Thumb + little finger, held ½ s** (index up) | **action 2**: by default task view (switch windows) |
-| 🖐️ **Open hand, held still** | activate / pause (progress bar) |
-| ✊ **Closed fist, held still** | **emergency lock** |
-| ⌨️ **Ctrl+Alt+K** | **emergency lock** from the keyboard (again = unlock, into pause) |
+| ✊ **Closed fist, held still** | **action 3**: by default **minimises the window under the cursor** |
+| 🖐️ **Open hand, held still** | pause / resume (progress bar). Control also **starts by itself** the first time your hand is seen |
+| ⌨️ **Ctrl+Alt+K** | **emergency lock** from the keyboard (again = unlock, into pause). If another app owns that shortcut, Hand Control uses **Ctrl+Alt+Shift+K** and shows which one |
 
 Also: a HUD-style preview (dimmed camera image; glowing hand skeleton, translucent palm, tracking box, pointer reticle with a fading
 trail, live pinch gauge; colour, brightness and trail are adjustable in *Settings → Camera*; *Window glass effect* gives a
@@ -54,12 +57,13 @@ keyboard focus, so a shortcut goes to the app you were using. Tiles and gestures
 | `zoom:in` / `zoom:out` | Ctrl + mouse wheel at the cursor: zooms in browsers, Explorer, Office, image viewers, maps |
 | `media:playpause` | also `next`, `prev`, `volup`, `voldown`, `mute` |
 | `open:TARGET` | opens an app (`open:notepad`), a file or folder, or a web address (`https:`, `ms-settings:`; the browser is a separate program) |
+| `window:minimize` / `window:maximize` | the window under the cursor (the desktop and the taskbar are never touched) |
 | `launcher` / `none` | show the launcher / do nothing |
 
 Actions only run while control is **ACTIVE**; keys are always released afterwards (also by the emergency lock); a mistyped action is
 rejected instead of saved.
 
-**Two-hand mode** (*Settings → Cursor*). One hand steers the cursor, the other clicks, drags and scrolls, so you can click without
+**Two-hand mode** (*Settings → Show advanced settings → Cursor*; off by default). One hand steers the cursor, the other clicks, drags and scrolls, so you can click without
 holding the pointing hand still. A fist or an open hand on the helper hand does nothing.
 
 **Dragging windows and files.** Point at a title bar (or a file), **pinch and keep pinching** for a moment (~0.3 s): a red disc grows
@@ -95,12 +99,13 @@ npm install
 npm start
 ```
 
-1. Stand 1–3 m from the camera with your hand clearly visible.
-2. **Controls → Calibrate the movement area** (two corners, 1.5 s each).
-3. Hold an **open hand still for ~2 seconds**: the badge turns green (**ACTIVE**).
-4. Point with your index finger. To stop everything: **Ctrl+Alt+K**.
+1. Stand 1–3 m from the camera and **show your hand**: the badge turns green (**ACTIVE**) and the hand pointer is your cursor.
+2. Not accurate? **Controls → Calibrate the movement area** (two corners, 1.5 s each).
+3. To pause: hold an **open hand still**. To stop everything: **Ctrl+Alt+K** (or the red button).
 
-Control **always starts paused**: nothing moves until you make the activation gesture yourself.
+Control **starts by itself** when your hand is first seen (simple mode). Prefer to start it on purpose? Turn off *Settings → Start controlling as
+soon as my hand is seen*: then you must hold an open hand still for ~1.6 s. After **you** pause or lock, only the open hand (or the
+button / shortcut) wakes it again.
 
 ### Installing it as a program
 
@@ -128,13 +133,13 @@ The build downloads **only** the Electron/NSIS build tools from the internet (on
 | **Disk** | settings only | `settings.json` in the app's data folder under `%APPDATA%`. Measurements save **numbers only**. |
 
 * **No recording:** frames are analysed and immediately discarded; no image or video is ever written.
-* **Accidental control is hard:** it starts paused; activation needs a deliberate gesture (open hand held **still** for
-  ~1.6 s; if you move, it starts over); the pause/lock gestures also work only when held still.
+* **Control only follows a visible hand:** nothing happens without your hand in view; losing it for a while pauses control (and it
+  resumes by itself when the hand comes back); the pause gesture and the fist action work only when held **still**.
 * **An emergency switch that always works:** `Ctrl+Alt+K` (global, even with the app in the background), the red button, the
-  tray-icon menu, or a closed fist. It instantly releases any pressed mouse buttons. Once LOCKED, gestures do nothing and
+  tray-icon menu. It instantly releases any pressed mouse buttons. Once LOCKED, gestures do nothing and
   only the keyboard/button unlock it, returning to *pause*.
 * If another app already owns `Ctrl+Alt+K` (for example JARVIS), Hand Control tries `Ctrl+Alt+Shift+K` and says so in the log;
-  the red button and the fist stay available regardless.
+  the red button and the tray menu stay available regardless.
 * If you move the **physical mouse**, hand control pauses for ~1.5 s so it does not fight you.
 * If the camera is on but analysed frames stop arriving (5 s) while you are ACTIVE, the app pauses itself.
 * On PCs with two graphics cards the app asks Windows for the **powerful** one (on the test PC, with the one Windows picked

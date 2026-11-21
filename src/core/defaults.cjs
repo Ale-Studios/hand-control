@@ -2,7 +2,7 @@
 // the renderer receives them over IPC.
 
 const DEFAULTS = {
-  version: 1,
+  version: 2,            // 2 = simple mode: one hand, palm steers, control starts as soon as the hand is seen
   camera: {
     deviceId: '',          // empty = default camera
     distance: 'near',      // near | mid | far  (see DISTANCE_PRESETS)
@@ -11,7 +11,7 @@ const DEFAULTS = {
   },
   control: {
     hand: 'any',           // any | right | left
-    pointAt: 'knuckle',    // knuckle = index knuckle (steady) | tip = fingertip | palm = centre of the palm (most steady)
+    pointAt: 'palm',       // knuckle = index knuckle (steady) | tip = fingertip | palm = centre of the palm (most steady)
     twoHands: false,       // two-hand mode: one hand steers, the other clicks / drags / scrolls
     cursorHand: 'right',   // which hand steers in two-hand mode (right | left)
     sensitivity: 1.0,      // 0.5..3: higher = smaller movements are enough
@@ -34,7 +34,7 @@ const DEFAULTS = {
   safety: {
     activateHoldMs: 1600,  // open hand held still to activate
     pauseHoldMs: 900,      // open hand held still to pause
-    lockHoldMs: 1000,      // closed fist for the emergency lock
+    autoActivate: true,    // simple mode: control becomes ACTIVE as soon as your hand is first seen (open hand also works)
     autoPauseSec: 20,      // hand not seen for this long = pause (0 = never)
     realMouseWins: true,   // if you move the physical mouse, hand control stops for a moment
     dryRun: false,         // test mode: show what would happen without touching the mouse or keyboard
@@ -45,6 +45,8 @@ const DEFAULTS = {
     holdMs: 500,                          // how long an action gesture is held before it fires
     ringPinch: 'launcher',                // thumb + ring finger
     pinkyPinch: 'keys:<cmd>+<tab>',       // thumb + little finger
+    fist: 'window:minimize',              // closed fist held still: minimise the window under the cursor
+    fistHoldMs: 600,
     // The launcher tiles: [name, action]. Actions: open:TARGET | keys:COMBO | zoom:in | zoom:out | media:NAME | launcher | none
     tiles: [
       ['Files', 'open:explorer'],
@@ -95,6 +97,8 @@ const ACTION_PRESETS = [
   ['media:mute', 'Mute'],
   ['open:osk', 'On-screen keyboard'],
   ['open:explorer', 'File Explorer'],
+  ['window:minimize', 'Minimise the window under the cursor'],
+  ['window:maximize', 'Maximise / restore the window under the cursor'],
   ['none', 'Nothing'],
 ];
 

@@ -35,11 +35,11 @@
       txt = 'ACTIVE'; sub = s.hand ? 'hand seen' : 'hand not seen';
       if (!s.hand) key = 'nohand';
     } else if (s.mode === 'paused') {
-      txt = 'PAUSED'; sub = s.hand ? 'open hand held still = activate' : 'hand not seen';
+      txt = 'PAUSED'; sub = s.hand ? 'open hand held still = activate' : 'show your hand to start';
     } else { txt = 'LOCKED'; sub = 'unlock with Ctrl+Alt+K'; }
     if (s.dry && s.mode === 'active') { txt = 'TEST MODE'; sub = 'nothing is sent to Windows'; }
     if (s.holdKind === 'toggle' && s.holdProgress > 0.05) sub = s.mode === 'active' ? 'hold still… pause' : 'hold still… activate';
-    if (s.holdKind === 'lock' && s.holdProgress > 0.05) { sub = 'fist… LOCK'; }
+    if (s.holdKind === 'fist' && s.holdProgress > 0.05) { sub = 'fist… hold still'; }
     document.documentElement.style.setProperty('--c', C[key]);
     $('txt').textContent = txt; $('sub').textContent = sub;
     $('camdot').className = s.camera === 'on' ? 'on' : '';

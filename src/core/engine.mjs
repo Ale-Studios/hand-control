@@ -12,7 +12,7 @@
 //   Pinch thumb + ring, held .......... action 1 (by default: the launcher)
 //   Pinch thumb + pinky, held ......... action 2 (by default: task view)
 //   Open hand held still .............. activate / pause
-//   Closed fist held still ............ EMERGENCY LOCK
+//   Closed fist held still ............ action 3 (by default: minimise the window under the cursor)
 
 import { OneEuro, smoothingToParams } from './filters.mjs';
 import { mapToScreen } from './mapping.mjs';
@@ -332,7 +332,7 @@ export class GestureEngine {
   // ───────────────────────────── safety gestures ─────────────────────────────
   _holds(hand, t, S) {
     const pose = this.main.pose;
-    let kind = pose === 'open' ? 'toggle' : pose === 'fist' ? 'lock' : null;
+    let kind = pose === 'open' ? 'toggle' : (pose === 'fist' && this.mode === 'active') ? 'fist' : null;
     if (this.mode === 'locked') kind = null; // once locked, only keyboard / button unlock
     const w = hand.lm[L.WRIST];
     if (kind !== this.holdKind) {
@@ -346,13 +346,13 @@ export class GestureEngine {
     if (this.holdLatched) return;
     if (t - this.holdStart >= this._holdNeed(S)) {
       this.holdLatched = true;
-      if (kind === 'lock') this._requestMode('locked', 'closed-fist gesture');
+      if (kind === 'fist') this.emit({ type: 'action', which: 'fist', meta: this.meta });
       else this._requestMode(this.mode === 'active' ? 'paused' : 'active', 'open-hand gesture');
     }
   }
 
   _holdNeed(S) {
-    if (this.holdKind === 'lock') return S.safety.lockHoldMs;
+    if (this.holdKind === 'fist') return (S.actions && S.actions.fistHoldMs) || 600;
     return this.mode === 'active' ? S.safety.pauseHoldMs : S.safety.activateHoldMs;
   }
 

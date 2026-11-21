@@ -10,6 +10,7 @@ function parseAction(text) {
   if (kind === 'keys') { const vks = parseCombo(value); return vks ? { kind, value, vks } : { error: `Unknown key in "${t}"` }; }
   if (kind === 'zoom') return value === 'in' || value === 'out' ? { kind, value } : { error: `zoom: must be "in" or "out" (${t})` };
   if (kind === 'media') return MEDIA[value.toLowerCase()] ? { kind, value: value.toLowerCase() } : { error: `Unknown media key in "${t}"` };
+  if (kind === 'window') return value === 'minimize' || value === 'maximize' ? { kind, value } : { error: `window: must be "minimize" or "maximize" (${t})` };
   if (kind === 'open' && value) return { kind, value };
   return { error: `Not a valid action: "${t}"` };
 }

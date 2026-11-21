@@ -96,12 +96,12 @@ function refreshHold() {
   const h = lastHud;
   if (!h || !h.holdKind || h.holdProgress < 0.04 || mode === 'locked') { w.className = 'holdWrap'; return; }
   w.className = 'holdWrap on';
-  const col = h.holdKind === 'lock' ? 'var(--red)' : mode === 'active' ? 'var(--yellow)' : 'var(--green)';
+  const col = h.holdKind === 'fist' ? 'var(--cyan, #7fd0ee)' : mode === 'active' ? 'var(--yellow)' : 'var(--green)';
   w.style.setProperty('--c', col);
   $('holdBar').style.width = Math.round(h.holdProgress * 100) + '%';
   $('holdText').textContent = h.holdProgress >= 1
-    ? (h.holdKind === 'lock' ? 'LOCKED' : mode === 'active' ? 'ACTIVE' : 'PAUSED')
-    : h.holdKind === 'lock' ? 'Fist… emergency lock' : mode === 'active' ? 'Hold still… pause' : 'Hold still… activation';
+    ? (h.holdKind === 'fist' ? 'FIST' : mode === 'active' ? 'ACTIVE' : 'PAUSED')
+    : h.holdKind === 'fist' ? 'Fist… hold still' : mode === 'active' ? 'Hold still… pause' : 'Hold still… activation';
 }
 
 // ───────────────────────── statistics ─────────────────────────
@@ -306,7 +306,7 @@ const SCHEMA = () => [
   { id: 'ui.handOverlay', type: 'check', label: 'Draw my hand on the screen, above every window', help: 'A transparent layer that never blocks your clicks. It also shows the hand when this window is hidden.' },
   { id: 'ui.handStyle', type: 'select', label: 'Look of the hand on screen', options: [['pointer', 'Hand pointer (a hand-shaped cursor)'], ['skeleton', 'Full tracked hand (skeleton)']], help: 'The pointer closes into a fist while you pinch or drag.' },
   { id: 'ui.hideCursor', type: 'check', label: 'Hide the Windows arrow while the hand is the cursor', help: 'Only while control is ACTIVE and your hand is seen. It comes back at once on pause, lock, quit, when the hand is lost, or when you move the real mouse.' },
-  { id: 'ui.overlaySize', type: 'range', min: 120, max: 500, step: 10, label: 'Size of the hand on screen (full hand)', fmt: (v) => v + ' px' },
+  { id: 'ui.overlaySize', type: 'range', min: 120, max: 500, step: 10, label: 'Size of the hand pointer on screen', fmt: (v) => v + ' px' },
   { id: 'ui.overlayOpacity', type: 'range', min: 0.3, max: 1, step: 0.05, label: 'Opacity of the hand on screen', fmt: (v) => Math.round(v * 100) + '%' },
   { id: 'ui.alwaysOnTop', type: 'check', label: 'Keep this window above the other apps (it is transparent)' },
   { id: 'ui.showSkeleton', type: 'check', label: 'Show the hand skeleton' },
@@ -332,24 +332,39 @@ const SCHEMA = () => [
   { g: 'Actions' },
   { id: 'actions.ringPinch', type: 'select', label: 'Thumb + ring finger, held', options: ACTION_PRESETS, help: 'Keep the index finger up and touch thumb and ring finger for half a second.' },
   { id: 'actions.pinkyPinch', type: 'select', label: 'Thumb + little finger, held', options: ACTION_PRESETS },
+  { id: 'actions.fist', type: 'select', label: 'Closed fist, held still', options: ACTION_PRESETS, help: 'Make a fist and keep it still. By default it minimises the window under the cursor.' },
+  { id: 'actions.fistHoldMs', type: 'range', min: 300, max: 1500, step: 50, label: 'Hold time for the fist', fmt: (v) => v + ' ms', help: 'Longer = fewer windows minimised by accident.' },
   { id: 'actions.holdMs', type: 'range', min: 300, max: 1500, step: 50, label: 'Hold time for these gestures', fmt: (v) => v + ' ms', help: 'Longer = fewer actions by accident.' },
   { g: 'Scrolling' },
   { id: 'scroll.speed', type: 'range', min: 0.3, max: 3, step: 0.1, label: 'Speed', fmt: (v) => v.toFixed(1) + '×' },
   { id: 'scroll.natural', type: 'check', label: '"Natural" scrolling (hand up = content up)' },
   { g: 'Safety' },
+  { id: 'safety.autoActivate', type: 'check', label: 'Start controlling as soon as my hand is seen', help: 'Simple mode. Off = you must hold an open hand still to activate. Pause and lock always work (Ctrl+Alt+Shift+K or the red button).' },
   { id: 'safety.activateHoldMs', type: 'range', min: 800, max: 3500, step: 100, label: 'Time to ACTIVATE (open hand held still)', fmt: (v) => (v / 1000).toFixed(1) + ' s', help: 'Longer = harder to activate by accident.' },
   { id: 'safety.pauseHoldMs', type: 'range', min: 500, max: 3000, step: 100, label: 'Time to PAUSE', fmt: (v) => (v / 1000).toFixed(1) + ' s' },
-  { id: 'safety.lockHoldMs', type: 'range', min: 500, max: 3000, step: 100, label: 'Fist time for the EMERGENCY LOCK', fmt: (v) => (v / 1000).toFixed(1) + ' s' },
   { id: 'safety.autoPauseSec', type: 'range', min: 0, max: 120, step: 5, label: 'Auto-pause when the hand is not seen', fmt: (v) => (v === 0 ? 'never' : v + ' s') },
   { id: 'safety.realMouseWins', type: 'check', label: 'If I move the physical mouse, hand control pauses for a moment' },
   { id: 'safety.dryRun', type: 'check', label: 'Test mode: show what would happen, without touching the mouse or keyboard', help: 'Nothing is sent to Windows: the log tells what each gesture WOULD do.' },
 ];
 
 let formBuilt = false;
+// Simple mode: only these settings are shown at first; "Show advanced settings" reveals the rest.
+const SIMPLE_IDS = new Set(['camera.deviceId', 'camera.distance', 'ui.handStyle', 'ui.hideCursor', 'ui.overlaySize', 'control.sensitivity',
+  'control.smoothing', 'actions.ringPinch', 'actions.pinkyPinch', 'actions.fist', 'safety.autoActivate', 'safety.dryRun']);
+let showAdvanced = false;
+try { showAdvanced = localStorage.getItem('hc.advanced') === '1'; } catch { /* no storage: simple view */ }
 function buildForm() {
   const root = $('settingsForm');
   root.innerHTML = '';
-  for (const f of SCHEMA()) {
+  const tg = document.createElement('div'); tg.className = 'set check';
+  tg.innerHTML = '<label><input type="checkbox"> <span>Show advanced settings</span></label>';
+  const tgi = tg.querySelector('input'); tgi.checked = showAdvanced;
+  tgi.addEventListener('change', () => { showAdvanced = tgi.checked; try { localStorage.setItem('hc.advanced', showAdvanced ? '1' : '0'); } catch { /* ok */ } buildForm(); });
+  root.appendChild(tg);
+  // keep only what is visible; a group title is shown only if something under it is
+  const schema = SCHEMA().filter((f) => f.g || showAdvanced || SIMPLE_IDS.has(f.id));
+  const visible = schema.filter((f, i) => !f.g || (schema[i + 1] && !schema[i + 1].g));
+  for (const f of visible) {
     if (f.g) { const g = document.createElement('div'); g.className = 'group'; g.textContent = f.g; root.appendChild(g); continue; }
     const wrap = document.createElement('div'); wrap.className = 'set' + (f.type === 'check' ? ' check' : '');
     const val = getPath(S, f.id);

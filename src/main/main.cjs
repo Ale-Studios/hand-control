@@ -71,7 +71,15 @@ let settingsFile;
 let settings = merge(DEFAULTS, {});
 function loadSettings() {
   settingsFile = path.join(app.getPath('userData'), 'settings.json');
-  try { settings = merge(DEFAULTS, JSON.parse(fs.readFileSync(settingsFile, 'utf8'))); } catch { settings = merge(DEFAULTS, {}); }
+  try {
+    const raw = JSON.parse(fs.readFileSync(settingsFile, 'utf8'));
+    if (raw.version !== 2) { // settings saved before simple mode: switch to it (one hand, palm steers, starts when the hand is seen)
+      raw.control = { ...raw.control, pointAt: 'palm', twoHands: false };
+      raw.safety = { ...raw.safety, autoActivate: true };
+      raw.version = 2;
+    }
+    settings = merge(DEFAULTS, raw);
+  } catch { settings = merge(DEFAULTS, {}); }
   settings.control.area = enforceMinArea(settings.control.area); // a saved area that is too small is enlarged
 }
 function saveSettings() {
@@ -97,6 +105,9 @@ let handSeen = false;
 let hud = { holdKind: null, holdProgress: 0, pose: 'none' };
 let win = null, overlay = null, tray = null;
 let quitting = false;
+// Simple mode: control starts by itself when the hand is first seen. It is armed once per start, and again after an automatic
+// pause (hand lost for too long, camera hiccup). A pause or lock that YOU asked for disarms it: then only the open hand wakes it.
+let autoArmed = !E2E;
 let lastInputAt = 0;
 let lastHudAt = 0;
 let blockedRequests = 0;
@@ -160,6 +171,8 @@ function setMode(next, reason, source = 'ui') {
     if (next === 'active') next = 'paused';
   }
   mode = next;
+  if (next === 'active') autoArmed = false;
+  else autoArmed = !E2E && next === 'paused' && /not seen|stopped delivering|camera/i.test(reason || ''); // (tests arm it by hand)
   if (mode !== 'active') { input.releaseAll(); actions.closeLauncher(); syncArrow(); }
   addLog(`Mode: ${label(mode)} — ${reason || source}`);
   send('mode', { mode, reason, source });
@@ -387,7 +400,7 @@ function wireIpc() {
     const before = settings;
     settings = merge(settings, patch);
     // actions typed into the settings must be valid; a bad one is put back to the previous value
-    for (const k of ['ringPinch', 'pinkyPinch']) {
+    for (const k of ['ringPinch', 'pinkyPinch', 'fist']) {
       if (parseAction(settings.actions[k]).error) { addLog(`Invalid action for ${k}: kept the previous one`); settings.actions[k] = before.actions[k]; }
     }
     if (settings.safety.dryRun !== before.safety.dryRun) { addLog(settings.safety.dryRun ? 'TEST MODE ON: nothing will be sent to the mouse or keyboard' : 'Test mode off'); sendOverlay(); }
@@ -421,7 +434,7 @@ function wireIpc() {
       case 'up': if (!dry) input.button(m.button === 'right' ? 'right' : 'left', false); else dryNote(m); done = true; break;
       case 'click': if (active) done = dry ? dryNote(m) : input.click(m.button === 'right' ? 'right' : 'left'); break;
       case 'wheel': if (active) done = dry ? dryNote(m) : input.wheel(+m.delta || 0); break;
-      case 'action': if (active && (m.which === 'ring' || m.which === 'pinky')) done = actions.runGesture(m.which); break;
+      case 'action': if (active && (m.which === 'ring' || m.which === 'pinky' || m.which === 'fist')) done = actions.runGesture(m.which); break;
       default: return;
     }
     const tMain = nowMs();
@@ -450,7 +463,9 @@ function wireIpc() {
     if (!fromMain(e) || !h) return;
     lastHudAt = Date.now();
     const changed = handSeen !== !!h.hand || hud.holdKind !== h.holdKind || Math.abs((hud.holdProgress || 0) - (h.holdProgress || 0)) > 0.04 || hud.pose !== h.pose;
+    const wasSeen = handSeen;
     handSeen = !!h.hand;
+    if (handSeen && !wasSeen && autoArmed && mode === 'paused' && settings.safety.autoActivate && !quitting) setMode('active', 'hand seen (simple mode)', 'auto');
     hud = { holdKind: h.holdKind || null, holdProgress: +h.holdProgress || 0, pose: h.pose || 'none' };
     if (changed) sendOverlay();
   });
@@ -536,7 +551,7 @@ if (!gotLock) {
     Object.defineProperty(api, 'mode', { get: () => mode, enumerable: true });
     Object.assign(api, {
       handOverlay: () => handOv, setHandOverlay: (on) => { handOvForce = !!on; syncHandOverlay(); },
-      setArrowTest: (on) => { arrowForce = !!on; syncArrow(); }, syncArrow,
+      setArrowTest: (on) => { arrowForce = !!on; syncArrow(); }, syncArrow, armAuto: () => { autoArmed = true; },
       setMode, input, actions, settings: () => settings, setSettings: (p) => { settings = merge(settings, p); send('settings', settings); },
       win: () => win, overlay: () => overlay, send, hotkeys: hotkeyInfo, blocked: () => blockedRequests,
       nowMs, userData: () => app.getPath('userData'), cameraState: () => cameraState, handSeen: () => handSeen,

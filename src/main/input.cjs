@@ -32,6 +32,21 @@ const CreateCursor = user32.func('void *CreateCursor(void *hInst, int xHot, int 
 const SetSystemCursor = user32.func('bool SetSystemCursor(void *hcur, unsigned int id)');
 const SystemParametersInfoW = user32.func('bool SystemParametersInfoW(unsigned int action, unsigned int param, void *pv, unsigned int ini)');
 const SPI_SETCURSORS = 0x0057;
+// windows: which one is under the cursor (walking the z-order, top first)
+const RECT = koffi.struct('RECT', { left: 'int32', top: 'int32', right: 'int32', bottom: 'int32' });
+const GetTopWindow = user32.func('void *GetTopWindow(void *h)');
+const GetWindow = user32.func('void *GetWindow(void *h, unsigned int cmd)');
+const IsWindowVisible = user32.func('bool IsWindowVisible(void *h)');
+const IsIconic = user32.func('bool IsIconic(void *h)');
+const IsZoomed = user32.func('bool IsZoomed(void *h)');
+const GetWindowRect = user32.func('bool GetWindowRect(void *h, _Out_ RECT *r)');
+const GetWindowLongPtrW = user32.func('intptr_t GetWindowLongPtrW(void *h, int i)');
+const GetClassNameW = user32.func('int GetClassNameW(void *h, _Out_ uint16_t *buf, int n)');
+const GetWindowTextW = user32.func('int GetWindowTextW(void *h, _Out_ uint16_t *buf, int n)');
+const PostMessageW = user32.func('bool PostMessageW(void *h, unsigned int m, uintptr_t w, intptr_t l)');
+const DwmGetWindowAttribute = koffi.load('dwmapi.dll').func('int DwmGetWindowAttribute(void *h, unsigned int attr, _Out_ int *v, unsigned int cb)');
+const SHELL_CLASSES = new Set(['Progman', 'WorkerW', 'Shell_TrayWnd', 'Shell_SecondaryTrayWnd']); // desktop and taskbar: never touched
+const wtext = (fn, h) => { const b = new Uint16Array(256); const n = fn(h, b, 256); return n > 0 ? Buffer.from(b.buffer, 0, n * 2).toString('utf16le') : ''; };
 // arrow, I-beam, wait, cross, up, the four resize cursors, move, "no", hand, "working in background", help
 const SYSTEM_CURSOR_IDS = [32512, 32513, 32514, 32515, 32516, 32642, 32643, 32644, 32645, 32646, 32648, 32649, 32650, 32651];
 
@@ -113,6 +128,37 @@ class Input {
   showSystemCursor() {
     try { SystemParametersInfoW(SPI_SETCURSORS, 0, null, 0); } catch { /* nothing else to do */ }
     this.cursorHidden = false;
+  }
+
+  /**
+   * The normal window under the cursor, or null. Windows that must not count are skipped: click-through layers (the hand drawn
+   * on screen), tool and no-activate windows, hidden / minimised / cloaked ones. The desktop and the taskbar are never returned.
+   */
+  windowAtCursor() {
+    const c = this.cursor();
+    let h = GetTopWindow(null);
+    for (let i = 0; h && i < 500; i++, h = GetWindow(h, 2)) {
+      if (!IsWindowVisible(h) || IsIconic(h)) continue;
+      const ex = Number(GetWindowLongPtrW(h, -20));
+      if (ex & (0x20 | 0x80 | 0x08000000)) continue;          // TRANSPARENT | TOOLWINDOW | NOACTIVATE
+      const cloaked = [0];
+      if (DwmGetWindowAttribute(h, 14, cloaked, 4) === 0 && cloaked[0]) continue; // on another virtual desktop
+      const r = {};
+      if (!GetWindowRect(h, r) || c.x < r.left || c.x >= r.right || c.y < r.top || c.y >= r.bottom) continue;
+      const cls = wtext(GetClassNameW, h);
+      if (SHELL_CLASSES.has(cls)) return null;
+      return { h, title: wtext(GetWindowTextW, h), cls };
+    }
+    return null;
+  }
+
+  /** 'minimize' | 'maximize' (toggles with restore) for the window under the cursor. Returns its title, or null if there is none. */
+  windowAction(what) {
+    const w = this.windowAtCursor();
+    if (!w) return null;
+    const sc = what === 'minimize' ? 0xF020 : (IsZoomed(w.h) ? 0xF120 : 0xF030); // SC_MINIMIZE | SC_RESTORE | SC_MAXIMIZE
+    PostMessageW(w.h, 0x0112, sc, 0);                         // WM_SYSCOMMAND, asynchronous: a hung window cannot block us
+    return w.title || w.cls;
   }
 
   /** true while the physical mouse has been used recently (control gives way, the arrow must be visible again). */

@@ -5,6 +5,7 @@
 //   zoom:in|out     Ctrl + mouse wheel at the cursor   (zooms in most apps)
 //   media:NAME      playpause | next | prev | volup | voldown | mute
 //   open:TARGET     open an app, file, folder or web address (the browser is a separate program)
+//   window:minimize | window:maximize   the window under the cursor
 //   launcher        show / hide the launcher tiles
 //   none            do nothing
 //
@@ -48,10 +49,10 @@ class Actions {
     this.lastRun = 0;
   }
 
-  /** Gesture → bound action. `which` is "ring" or "pinky". */
+  /** Gesture → bound action. `which` is "ring", "pinky" or "fist". */
   runGesture(which) {
     const a = this.d.getSettings().actions;
-    const text = which === 'ring' ? a.ringPinch : a.pinkyPinch;
+    const text = which === 'ring' ? a.ringPinch : which === 'fist' ? a.fist : a.pinkyPinch;
     const now = Date.now();
     if (now - this.lastRun < 400) return false; // never twice in a blink
     this.lastRun = now;
@@ -69,6 +70,11 @@ class Actions {
       else if (act.kind === 'zoom') this.d.input.zoom(act.value === 'in' ? 1 : -1);
       else if (act.kind === 'media') this.d.input.media(act.value);
       else if (act.kind === 'open') openTarget(act.value);
+      else if (act.kind === 'window') {
+        const title = this.d.input.windowAction(act.value);
+        if (title == null) { this.d.log('No window under the cursor'); return false; }
+        why = (why ? why + ': ' : '') + title;
+      }
       this.d.log(`Action: ${text}${why ? ' (' + why + ')' : ''}`);
       this.d.emit('action', text, false);
       return true;
