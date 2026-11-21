@@ -3,7 +3,7 @@
 Control your PC **with your hands**, without touching a mouse or keyboard, even from a few metres away.
 A camera watches your hand; **everything stays on your PC** (no internet, no cloud, no recordings).
 
-**Simple by default:** show one hand and it just works — your hand is the cursor, a pinch clicks and drags, a fist minimises a window.
+**Simple by default:** show one hand and it just works — your hand is the cursor, a pinch clicks, a closed fist grabs and drags.
 The two-hand mode and the fine-tuning settings are still there, under *Settings → Show advanced settings*.
 
 > Status: **MVP (v0.1)**. Tested with synthetic "fake hands" along the whole chain down to the real mouse
@@ -19,8 +19,8 @@ The two-hand mode and the fine-tuning settings are still there, under *Settings 
 | 🤏 **Pinch thumb + middle** | right click |
 | ✌️ **Index + middle up** | scroll: move your hand up/down |
 | 🤏 **Thumb + ring finger, held ½ s** (index up) | **action 1**: by default the launcher (big tiles) |
-| 🤏 **Thumb + little finger, held ½ s** (index up) | **action 2**: by default task view (switch windows) |
-| ✊ **Closed fist, held still** | **action 3**: by default **minimises the window under the cursor** |
+| ✊ **Closed fist + move** | **grab and drag** what is under the cursor (a folder, a window); open the hand to drop it. A still fist does nothing (it never clicks) |
+| 🤏 **Thumb + little finger, held ½ s** (index up) | **action 2**: by default **minimises the window under the cursor** |
 | 🖐️ **Open hand, held still** | pause / resume (progress bar). Control also **starts by itself** the first time your hand is seen |
 | ⌨️ **Ctrl+Alt+K** | **emergency lock** from the keyboard (again = unlock, into pause). If another app owns that shortcut, Hand Control uses **Ctrl+Alt+Shift+K** and shows which one |
 
@@ -66,9 +66,11 @@ rejected instead of saved.
 **Two-hand mode** (*Settings → Show advanced settings → Cursor*; off by default). One hand steers the cursor, the other clicks, drags and scrolls, so you can click without
 holding the pointing hand still. A fist or an open hand on the helper hand does nothing.
 
-**Dragging windows and files.** Point at a title bar (or a file), **pinch and keep pinching** for a moment (~0.3 s): a red disc grows
-around the hand and the label says DRAGGING. Move your hand and the window follows; **open the pinch to drop it**. Details that make
-this reliable:
+**Dragging windows and files.** The easiest way: point at a title bar (or a file), **close your hand into a fist and move it**: the
+window follows; **open the hand to drop it**. The fist grabs where the cursor was just before your hand closed, and only once the
+hand moves, so a fist alone never clicks. Or with a pinch: **pinch and keep pinching** for a moment (~0.3 s), move, open the pinch.
+While you carry something, switching between pinch and fist keeps holding it. The dot turns red and the label says DRAGGING.
+Details that make this reliable:
 - the click lands where you were aiming *just before* the pinch (*Settings → Clicks → Aim look-back*), so the pinch itself does not
   push the cursor off the title bar;
 - when the drag starts, the cursor glides from the grab point to the hand instead of jumping, so the window does not leap;
@@ -134,7 +136,7 @@ The build downloads **only** the Electron/NSIS build tools from the internet (on
 
 * **No recording:** frames are analysed and immediately discarded; no image or video is ever written.
 * **Control only follows a visible hand:** nothing happens without your hand in view; losing it for a while pauses control (and it
-  resumes by itself when the hand comes back); the pause gesture and the fist action work only when held **still**.
+  resumes by itself when the hand comes back); the pause gesture works only when held **still**, and a closed fist grabs only once it moves.
 * **An emergency switch that always works:** `Ctrl+Alt+K` (global, even with the app in the background), the red button, the
   tray-icon menu. It instantly releases any pressed mouse buttons. Once LOCKED, gestures do nothing and
   only the keyboard/button unlock it, returning to *pause*.
@@ -176,7 +178,7 @@ HC_E2E_ONLY=dbl,kill npm run test:e2e   # only some sections (dbl = double click
 
 `test:e2e` opens a full-screen window that **uses the mouse by itself for ~3 minutes** (do not touch anything) in an isolated
 profile (temporary `USERPROFILE/APPDATA/LOCALAPPDATA`); it checks movement, click, double click, right click, drag, scrolling,
-pause, the emergency switch (with a real `Ctrl+Alt+K`), fist, auto-pause and the network block, and measures latency.
+pause, the emergency switch (with a real `Ctrl+Alt+K`), fist and pinch window drags, minimise, auto-pause and the network block, and measures latency.
 
 ## Project structure
 

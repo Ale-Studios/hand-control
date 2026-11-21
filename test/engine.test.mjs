@@ -110,25 +110,59 @@ test('waving with an open hand activates nothing', () => {
   assert.equal(eng.mode, 'paused');
 });
 
-test('closed fist held still = the fist action (once), and it does NOT lock', () => {
-  const { eng, events } = setup();
-  eng.setMode('active');
-  let t = run(eng, 0, 400, () => makeHand({ pose: 'fist' }));
-  assert.equal(events.filter((e) => e.type === 'action').length, 0, 'not yet: the fist must be held');
-  t = run(eng, t, 1500, () => makeHand({ pose: 'fist' }));
-  assert.deepEqual(events.filter((e) => e.type === 'action').map((e) => e.which), ['fist'], 'fires once however long it is held');
-  assert.equal(eng.mode, 'active', 'a fist is no longer an emergency lock');
-  assert.equal(events.filter((e) => e.type === 'mode-request').length, 0);
+test('a closed fist held still does nothing: no click, no action, no lock (whatever point steers the cursor)', () => {
+  // with the knuckle or the fingertip, closing the hand moves that point by tens of pixels: it must not count as moving
+  for (const pointAt of ['palm', 'knuckle', 'tip']) {
+    const { eng, events } = setup({ control: { pointAt } });
+    eng.setMode('active');
+    let t = run(eng, 0, 600, () => makeHand({ pose: 'point', at: CENTER }));
+    events.length = 0;
+    t = run(eng, t, 2500, () => makeHand({ pose: 'fist', at: CENTER }));
+    t = run(eng, t, 500, () => makeHand({ pose: 'point', at: CENTER }));
+    assert.equal(events.filter((e) => e.type === 'down' || e.type === 'up' || e.type === 'action' || e.type === 'click').length, 0, pointAt + ': ' + types(events).join(','));
+    assert.equal(eng.mode, 'active', 'a fist is not an emergency lock');
+  }
 });
 
-test('fist action: not while moving, not while paused', () => {
-  const a = setup();
-  a.eng.setMode('active');
-  run(a.eng, 0, 3000, (ms) => makeHand({ pose: 'fist', at: { x: 0.3 + 0.3 * Math.abs(Math.sin(ms / 300)), y: 0.5 } }));
-  assert.equal(a.events.filter((e) => e.type === 'action').length, 0, 'a waving fist does nothing');
-  const b = setup();
-  run(b.eng, 0, 2000, () => makeHand({ pose: 'fist' }));
-  assert.equal(b.events.filter((e) => e.type === 'action').length, 0, 'paused: nothing');
+test('closed fist + move = GRAB and drag from where the fist closed; opening the hand drops it', () => {
+  const { eng, events } = setup();
+  eng.setMode('active');
+  let t = run(eng, 0, 700, () => makeHand({ pose: 'point', at: { x: 0.4, y: 0.5 } }));
+  t = run(eng, t, 300, () => makeHand({ pose: 'fist', at: { x: 0.4, y: 0.5 } }));
+  assert.equal(events.filter((e) => e.type === 'down').length, 0, 'closing the fist alone presses nothing');
+  const grabAt = eng.hud.screen;
+  assert.ok(eng.hud.grabArmed, 'the fist is ready to grab');
+  t = run(eng, t, 900, (ms) => makeHand({ pose: 'fist', at: { x: 0.4 + 0.15 * Math.min(1, ms / 600), y: 0.5 } }));
+  const i = events.findIndex((e) => e.type === 'down');
+  assert.ok(i > 0, 'moving the fist presses the button');
+  const before = events.slice(0, i).filter((e) => e.type === 'move').pop();
+  assert.ok(Math.abs(before.x - grabAt.x) * 1920 < 6, 'it presses where the fist closed, not where the hand already is');
+  assert.ok(eng.hud.dragging, 'dragging');
+  const lastMove = events.filter((e) => e.type === 'move').pop();
+  assert.ok(lastMove.x < before.x - 0.05 || lastMove.x > before.x + 0.05, 'the cursor follows the hand while the fist is closed');
+  t = run(eng, t, 400, () => makeHand({ pose: 'open', at: { x: 0.55, y: 0.5 } }));
+  assert.deepEqual(events.filter((e) => e.type === 'down' || e.type === 'up').map((e) => e.type), ['down', 'up'], 'opening the hand drops it');
+  assert.equal(events.filter((e) => e.type === 'action').length, 0);
+});
+
+test('while carrying something, pinch ⇄ fist keeps holding (no drop, no minimise)', () => {
+  const { eng, events } = setup();
+  eng.setMode('active');
+  let t = run(eng, 0, 700, () => makeHand({ pose: 'point', at: { x: 0.4, y: 0.5 } }));
+  t = run(eng, t, 800, (ms) => makeHand({ pose: 'pinch', at: { x: 0.4 + 0.1 * (ms / 800), y: 0.5 } }));
+  assert.ok(eng.hud.dragging, 'pinch drag started');
+  t = run(eng, t, 1500, () => makeHand({ pose: 'fist', at: { x: 0.5, y: 0.5 } })); // the fingers curl and the hand rests
+  t = run(eng, t, 500, (ms) => makeHand({ pose: 'pinch', at: { x: 0.5 + 0.05 * (ms / 500), y: 0.5 } }));
+  assert.deepEqual(events.filter((e) => e.type === 'down' || e.type === 'up').map((e) => e.type), ['down'], 'still holding');
+  t = run(eng, t, 400, () => makeHand({ pose: 'point', at: { x: 0.55, y: 0.5 } }));
+  assert.deepEqual(events.filter((e) => e.type === 'down' || e.type === 'up').map((e) => e.type), ['down', 'up'], 'dropped once the hand opens');
+  assert.equal(events.filter((e) => e.type === 'action').length, 0, 'nothing minimised');
+});
+
+test('the fist grabs nothing while PAUSED', () => {
+  const { eng, events } = setup();
+  run(eng, 0, 2000, (ms) => makeHand({ pose: 'fist', at: { x: 0.3 + 0.3 * (ms / 2000), y: 0.5 } }));
+  assert.equal(events.filter((e) => e.type === 'down' || e.type === 'move').length, 0);
 });
 
 test('once LOCKED gestures do nothing and an open hand does not unlock', () => {

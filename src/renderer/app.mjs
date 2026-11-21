@@ -26,7 +26,7 @@ let tracker = null;
 
 const POSE_EN = {
   none: 'No hand', point: 'Pointing', pinch: 'Click (pinch)', rclick: 'Right click', ringpinch: 'Action 1 (ring)', pinkypinch: 'Action 2 (pinky)',
-  scroll: 'Scrolling', open: 'Open hand', fist: 'Fist', other: '—',
+  scroll: 'Scrolling', open: 'Open hand', fist: 'Fist (grab)', other: '—',
 };
 const HAND_CONNECTIONS = [[0,1],[1,2],[2,3],[3,4],[0,5],[5,6],[6,7],[7,8],[5,9],[9,10],[10,11],[11,12],[9,13],[13,14],[14,15],[15,16],[13,17],[17,18],[18,19],[19,20],[0,17]];
 
@@ -220,7 +220,7 @@ function sendHandToScreen(frame, hud) {
     aspect: frame.meta && frame.meta.W ? frame.meta.W / frame.meta.H : 16 / 9,
     hud: {
       handVisible: hud.handVisible, mode: hud.mode, pressed: !!hud.pressed, anchor: hud.anchor, screen: hud.screen,
-      steerIndex: hud.steerIndex, poseName: POSE_EN[hud.pose] || '', dragging: !!hud.dragging,
+      steerIndex: hud.steerIndex, poseName: POSE_EN[hud.pose] || '', dragging: !!hud.dragging, grabArmed: !!hud.grabArmed,
     },
   };
   if (hud.helperIndex >= 0 && frame.hands[hud.helperIndex]) {
@@ -326,13 +326,11 @@ const SCHEMA = () => [
   { id: 'clicks.pinchSensitivity', type: 'range', min: 0.6, max: 1.8, step: 0.05, label: 'Pinch sensitivity', fmt: (v) => v.toFixed(2) + '×', help: 'Higher = a looser pinch is enough.' },
   { id: 'clicks.dragFreezeMs', type: 'range', min: 100, max: 700, step: 10, label: 'Cursor held still after a pinch', fmt: (v) => v + ' ms', help: 'More precise clicks; after this time, moving your hand drags.' },
   { id: 'clicks.lookbackMs', type: 'range', min: 0, max: 500, step: 25, label: 'Click aim: look back in time', fmt: (v) => (v === 0 ? 'off' : v + ' ms'), help: 'The click lands where your aim was calm just before the pinch, not where the pinch nudged your hand.' },
-  { id: 'clicks.dragReleaseMs', type: 'range', min: 40, max: 400, step: 10, label: 'Hold through finger slips (dragging)', fmt: (v) => v + ' ms', help: 'While you drag, a brief slip of the pinch does not drop what you carry.' },
+  { id: 'clicks.dragReleaseMs', type: 'range', min: 40, max: 400, step: 10, label: 'Hold through finger slips (dragging)', fmt: (v) => v + ' ms', help: 'While you drag (pinch or fist), a brief slip of the fingers does not drop what you carry.' },
   { id: 'clicks.confirmMs', type: 'range', min: 20, max: 160, step: 5, label: 'Minimum gesture duration', fmt: (v) => v + ' ms', help: 'Higher = fewer accidental clicks, but less responsive.' },
   { g: 'Actions' },
   { id: 'actions.ringPinch', type: 'select', label: 'Thumb + ring finger, held', options: ACTION_PRESETS, help: 'Keep the index finger up and touch thumb and ring finger for half a second.' },
-  { id: 'actions.pinkyPinch', type: 'select', label: 'Thumb + little finger, held', options: ACTION_PRESETS },
-  { id: 'actions.fist', type: 'select', label: 'Closed fist, held still', options: ACTION_PRESETS, help: 'Make a fist and keep it still. By default it minimises the window under the cursor.' },
-  { id: 'actions.fistHoldMs', type: 'range', min: 300, max: 1500, step: 50, label: 'Hold time for the fist', fmt: (v) => v + ' ms', help: 'Longer = fewer windows minimised by accident.' },
+  { id: 'actions.pinkyPinch', type: 'select', label: 'Thumb + little finger, held', options: ACTION_PRESETS, help: 'Keep the index finger up and touch thumb and little finger for half a second. By default it minimises the window under the cursor.' },
   { id: 'actions.holdMs', type: 'range', min: 300, max: 1500, step: 50, label: 'Hold time for these gestures', fmt: (v) => v + ' ms', help: 'Longer = fewer actions by accident.' },
   { g: 'Scrolling' },
   { id: 'scroll.speed', type: 'range', min: 0.3, max: 3, step: 0.1, label: 'Speed', fmt: (v) => v.toFixed(1) + '×' },
@@ -350,7 +348,7 @@ let formBuilt = false;
 // Simple mode: only these settings are shown at first; "Show advanced settings" reveals the rest.
 const SIMPLE_IDS = new Set(['camera.deviceId', 'camera.distance', 'ui.handStyle', 'ui.hideCursor', 'ui.overlaySize', 'ui.overlayOpacity',
   'ui.windowOpacity', 'ui.alwaysOnTop', 'control.sensitivity',
-  'control.smoothing', 'actions.ringPinch', 'actions.pinkyPinch', 'actions.fist', 'safety.autoActivate', 'safety.dryRun']);
+  'control.smoothing', 'actions.ringPinch', 'actions.pinkyPinch', 'safety.autoActivate', 'safety.dryRun']);
 let showAdvanced = false;
 try { showAdvanced = localStorage.getItem('hc.advanced') === '1'; } catch { /* no storage: simple view */ }
 function buildForm() {

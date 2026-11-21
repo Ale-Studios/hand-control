@@ -83,6 +83,10 @@ function loadSettings() {
       raw.ui = { ...ui, windowOpacity: DEFAULTS.ui.windowOpacity, overlayOpacity: v === 3 && ui.overlayOpacity === 0.6 ? DEFAULTS.ui.overlayOpacity : ui.overlayOpacity };
       if (raw.ui.overlayOpacity === undefined) delete raw.ui.overlayOpacity;
     }
+    if (v < 5) { // the fist now grabs and drags; "minimise the window" moves to thumb + little finger (if it was left at its default)
+      const a = raw.actions || {};
+      if (a.pinkyPinch === undefined || a.pinkyPinch === 'keys:<cmd>+<tab>') raw.actions = { ...a, pinkyPinch: 'window:minimize' };
+    }
     raw.version = DEFAULTS.version;
     settings = merge(DEFAULTS, raw);
   } catch { settings = merge(DEFAULTS, {}); }
@@ -205,7 +209,7 @@ function registerHotkeys() {
     if (mode === 'locked') return;
     setMode(mode === 'active' ? 'paused' : 'active', mode === 'active' ? 'paused from keyboard' : 'activated from keyboard', 'hotkey');
   });
-  if (!killKeyOk) addLog('WARNING: could not register the emergency shortcut. Use the red button or the fist gesture.');
+  if (!killKeyOk) addLog('WARNING: could not register the emergency shortcut. Use the red button or the tray menu.');
   send('hotkeys', hotkeyInfo());
 }
 const hotkeyInfo = () => ({ kill: killKeyUsed, killOk: killKeyOk, pause: settings.safety.pauseKey, pauseOk: pauseKeyOk });
@@ -430,7 +434,7 @@ function wireIpc() {
     const before = settings;
     settings = merge(settings, patch);
     // actions typed into the settings must be valid; a bad one is put back to the previous value
-    for (const k of ['ringPinch', 'pinkyPinch', 'fist']) {
+    for (const k of ['ringPinch', 'pinkyPinch']) {
       if (parseAction(settings.actions[k]).error) { addLog(`Invalid action for ${k}: kept the previous one`); settings.actions[k] = before.actions[k]; }
     }
     if (settings.safety.dryRun !== before.safety.dryRun) { addLog(settings.safety.dryRun ? 'TEST MODE ON: nothing will be sent to the mouse or keyboard' : 'Test mode off'); sendOverlay(); }
@@ -463,7 +467,7 @@ function wireIpc() {
       case 'up': if (!dry) input.button(m.button === 'right' ? 'right' : 'left', false); else dryNote(m); done = true; break;
       case 'click': if (active) done = dry ? dryNote(m) : input.click(m.button === 'right' ? 'right' : 'left'); break;
       case 'wheel': if (active) done = dry ? dryNote(m) : input.wheel(+m.delta || 0); break;
-      case 'action': if (active && (m.which === 'ring' || m.which === 'pinky' || m.which === 'fist')) done = actions.runGesture(m.which); break;
+      case 'action': if (active && (m.which === 'ring' || m.which === 'pinky')) done = actions.runGesture(m.which); break;
       default: return;
     }
     const tMain = nowMs();

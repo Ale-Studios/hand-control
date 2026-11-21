@@ -9,10 +9,12 @@
 //   Pinch thumb + index ............... left button (pinch = down, open = up; held and moved = drag)
 //   Pinch thumb + middle .............. right click
 //   Index + middle up ("V" sign) ...... scroll (move the hand up/down)
+//   Closed fist, moved ................ GRAB and drag (closes on the point under the cursor, opens = drop). A fist alone,
+//                                       without moving, does nothing: it never clicks
 //   Pinch thumb + ring, held .......... action 1 (by default: the launcher)
-//   Pinch thumb + pinky, held ......... action 2 (by default: task view)
+//   Pinch thumb + pinky, held ......... action 2 (by default: minimise the window under the cursor)
 //   Open hand held still .............. activate / pause
-//   Closed fist held still ............ action 3 (by default: minimise the window under the cursor)
+// While carrying something, the pinch and the fist count as the same grab: switching between them keeps holding.
 
 import { OneEuro, smoothingToParams } from './filters.mjs';
 import { mapToScreen } from './mapping.mjs';
@@ -33,6 +35,9 @@ const DOUBLE_CLICK_SNAP = 0.03; // screen fraction within which the 2nd click "s
 const GLIDE_STEP_PX = 40;       // when a drag starts, the cursor catches up with the hand at most this much per frame
 const CLICK_STICK_PX = 24;       // after a click the cursor stays put unless the hand moves more than this (screen pixels)
 const ACTION_HOLD_MS = 500;
+const FIST_DRAG_PX = 22;         // a closed fist grabs only once the hand moves this far (screen pixels): a still fist does nothing
+const FIST_SETTLE_MS = 120;      // after a fist grabs, the cursor stays still this long before the drag moves it
+const GRAB = (p) => p === 'pinch' || p === 'fist';
 
 /** Pose memory of one hand. */
 function newTracker() {
@@ -74,7 +79,8 @@ function classify(tr, m, S) {
 function debounce(tr, raw, t, S, leaveMs) {
   if (raw !== tr.cand) { tr.cand = raw; tr.candSince = t; }
   // leaving a pinch is quick (a click should end promptly), except while dragging: a finger slip must not drop the thing you carry
-  const need = tr.pose === 'pinch' ? (leaveMs != null ? leaveMs : Math.min(S.clicks.confirmMs, 40)) : S.clicks.confirmMs;
+  const need = tr.pose === 'pinch' ? (leaveMs != null ? leaveMs : Math.min(S.clicks.confirmMs, 40))
+    : tr.pose === 'fist' && leaveMs != null ? leaveMs : S.clicks.confirmMs;
   if (tr.pose !== tr.cand && t - tr.candSince >= need) {
     const prev = tr.pose;
     tr.pose = tr.cand;
@@ -97,6 +103,8 @@ export class GestureEngine {
     this.screen = { w: 1920, h: 1080 };
     this.fx = new OneEuro();
     this.fy = new OneEuro();
+    this.gx = new OneEuro(); // the palm (for the fist)
+    this.gy = new OneEuro();
     this.scrollMain = { f: new OneEuro({ minCutoff: 1.5, beta: 0.01 }), prev: null, acc: 0 };
     this.scrollHelper = { f: new OneEuro({ minCutoff: 1.5, beta: 0.01 }), prev: null, acc: 0 };
     this.reset();
@@ -110,7 +118,7 @@ export class GestureEngine {
     this.mode = mode;
     this._releaseAll();
     if (!keepHold) { this.holdKind = null; this.holdLatched = false; }
-    this.fx.reset(); this.fy.reset();
+    this.fx.reset(); this.fy.reset(); this.gx.reset(); this.gy.reset();
     this._resetScroll();
   }
 
@@ -123,6 +131,11 @@ export class GestureEngine {
     this.dragging = false;
     this.glide = null;
     this.freezePos = null;
+    this.fistArm = null;     // {at, palm, t}: a fist has closed here; it grabs once the palm moves
+    this.fistBase = null;    // {cur, palm}: while dragging with a fist, the cursor = cur + (palm now - palm)
+    this.dragPos = null;     // last cursor position sent while dragging
+    this.lastOut = null;     // last cursor position sent while pointing (where the real cursor is)
+    this.palm = { x: 0.5, y: 0.5 };
     this.lastClick = null;   // {x,y,t} of the last short click (for the double click)
     this.lastRightT = -Infinity;
     this.hist = [];
@@ -131,7 +144,7 @@ export class GestureEngine {
     this.steerHand = null; this.helperHand = null;
     this.meta = null;
     this.hud = { handVisible: false, pose: 'none', mode: this.mode, holdKind: null, holdProgress: 0, anchor: null, screen: this.ptr, pressed: null };
-    this.fx.reset(); this.fy.reset();
+    this.fx.reset(); this.fy.reset(); this.gx.reset(); this.gy.reset();
     this._resetScroll();
   }
 
@@ -163,6 +176,7 @@ export class GestureEngine {
 
     const anchor = this._anchor(steer.lm, S);
     this._pointer(anchor, t, S);
+    this._palmTrack(steer.lm, t, S);
     this._holds(steer, t, S);
     if (this.mode === 'active') this._act(steer, t, S);
     this._actionHold(tr, t, S);
@@ -180,6 +194,7 @@ export class GestureEngine {
       screen: { ...this.ptr },
       pressed: this.pressed,
       dragging: this.dragging,
+      grabArmed: !!this.fistArm,
       measures: m,
       steerIndex: hands.indexOf(steer),
       helperIndex: helper ? hands.indexOf(helper) : -1,
@@ -195,6 +210,7 @@ export class GestureEngine {
     if (lost > LOST_RELEASE_MS && this.pressed) this._releaseAll();
     if (lost > 250) {
       tr.pose = 'none'; tr.cand = 'none';
+      this.fistArm = null;
       this.holdKind = null; this.holdLatched = false;
       this.scrollMain.prev = null;
     }
@@ -207,7 +223,7 @@ export class GestureEngine {
   }
 
   _resetTracking() {
-    this.fx.reset(); this.fy.reset();
+    this.fx.reset(); this.fy.reset(); this.gx.reset(); this.gy.reset();
     this.hist = [];
     this.scrollMain.prev = null;
     this.holdKind = null; this.holdLatched = false;
@@ -305,6 +321,18 @@ export class GestureEngine {
     while (this.hist.length > 2 && t - this.hist[0].t > 700) this.hist.shift();
   }
 
+  /** The centre of the palm on the screen (smoothed like the pointer): the fist grabs and drags with it, because the palm does
+   *  not move when the fingers close. */
+  _palmTrack(lm, t, S) {
+    const c = S.control;
+    const p = smoothingToParams(c.smoothing);
+    this.gx.configure(p); this.gy.configure(p);
+    let u = 0, v = 0;
+    for (const i of PALM_POINTS) { u += lm[i].x / PALM_POINTS.length; v += lm[i].y / PALM_POINTS.length; }
+    if (S.camera.mirror) u = 1 - u;
+    this.palm = mapToScreen(this.gx.filter(u * REF_W, t) / REF_W, this.gy.filter(v * REF_H, t) / REF_H, c.area, c.sensitivity, c.snap);
+  }
+
   /**
    * Where the cursor should be when a pinch/click is recognised. The pinch itself nudges the hand (the aim "drifts"
    * while the fingers close), so if the aim was still before the gesture we use its calm position a little earlier
@@ -332,7 +360,7 @@ export class GestureEngine {
   // ───────────────────────────── safety gestures ─────────────────────────────
   _holds(hand, t, S) {
     const pose = this.main.pose;
-    let kind = pose === 'open' ? 'toggle' : (pose === 'fist' && this.mode === 'active') ? 'fist' : null;
+    let kind = pose === 'open' ? 'toggle' : null; // (the fist grabs and drags: it has no "hold" action any more)
     if (this.mode === 'locked') kind = null; // once locked, only keyboard / button unlock
     const w = hand.lm[L.WRIST];
     if (kind !== this.holdKind) {
@@ -346,13 +374,11 @@ export class GestureEngine {
     if (this.holdLatched) return;
     if (t - this.holdStart >= this._holdNeed(S)) {
       this.holdLatched = true;
-      if (kind === 'fist') this.emit({ type: 'action', which: 'fist', meta: this.meta });
-      else this._requestMode(this.mode === 'active' ? 'paused' : 'active', 'open-hand gesture');
+      this._requestMode(this.mode === 'active' ? 'paused' : 'active', 'open-hand gesture');
     }
   }
 
   _holdNeed(S) {
-    if (this.holdKind === 'fist') return (S.actions && S.actions.fistHoldMs) || 600;
     return this.mode === 'active' ? S.safety.pauseHoldMs : S.safety.activateHoldMs;
   }
 
@@ -384,8 +410,25 @@ export class GestureEngine {
 
   // ───────────────────────────── actions (ACTIVE mode only) ─────────────────────────────
   _onPoseChange(prev, next, t, S) {
-    if (prev === 'pinch' && this.pressed && this.pressOwner === 'main') this._release(t, 'main');
+    const holding = this.pressed && this.pressOwner === 'main';
+    // pinch ⇄ fist while carrying something: the same grab goes on (the fingers often curl or loosen while you carry).
+    // The cursor continues from where it is: with a fist it follows the palm, with a pinch it glides back to the aim point.
+    if (holding && GRAB(prev) && GRAB(next)) {
+      const cur = this.dragPos || this.freezePos || this.ptr;
+      if (next === 'fist') this.fistBase = { cur: { ...cur }, palm: { ...this.palm } };
+      else { this.fistBase = null; if (this.dragging) this.glide = { ...cur }; }
+      return;
+    }
+    if (holding && GRAB(prev)) this._release(t, 'main');
+    if (prev === 'fist') { this.fistArm = null; this.fistBase = null; }
     if (next === 'pinch') this._press(t, S);
+    // a fist does not press anything yet: it remembers where it closed and grabs there once the hand (palm) moves
+    // It grabs where the cursor was just BEFORE the hand started closing: while the fingers curl, the knuckle or the
+    // fingertip (if one of them steers) drags the cursor a little before the fist is recognised.
+    if (next === 'fist' && !this.pressed) {
+      const pre = this.hist.length ? this._histAt(this.main.candSince - 40) : this.lastOut;
+      this.fistArm = { at: pre ? { ...pre } : { ...this.ptr }, palm: { ...this.palm }, t };
+    }
     if (next === 'rclick' && t - this.lastRightT > 350) {
       this.lastRightT = t;
       const f = this._aimAt(this.main.candSince, S);
@@ -417,12 +460,15 @@ export class GestureEngine {
     const wasDrag = this.dragging;
     const pos = wasDrag ? this.ptr : this.freezePos;
     if (!wasDrag && pos) this.lastClick = { x: pos.x, y: pos.y, t };
+    const at = this.dragPos || this.freezePos; // where the real cursor is now
+    if (at) this.lastOut = { x: at.x, y: at.y };
     this.emit({ type: 'up', button: 'left', meta: this.meta });
     this.pressed = null; this.pressOwner = null;
-    this.dragging = false;
+    this.dragging = false; this.fistBase = null; this.dragPos = null;
   }
 
   _releaseAll() {
+    this.fistArm = null; this.fistBase = null; this.dragPos = null;
     if (this.pressed) {
       this.emit({ type: 'up', button: this.pressed, meta: this.meta });
       this.pressed = null; this.pressOwner = null; this.dragging = false;
@@ -438,19 +484,37 @@ export class GestureEngine {
       const lc = this.lastClick;
       if (lc && t - lc.t < DOUBLE_CLICK_MS
         && Math.hypot((p.x - lc.x) * this.screen.w, (p.y - lc.y) * this.screen.h) < CLICK_STICK_PX) p = { x: lc.x, y: lc.y };
+      this.lastOut = { x: p.x, y: p.y };
       this.emit({ type: 'move', x: p.x, y: p.y, meta: this.meta });
-    } else if (pose === 'pinch' && this.pressed && this.pressOwner === 'main') {
+    } else if (pose === 'fist' && this.fistArm && !this.pressed) {
+      // The fist grabs once the hand has really moved: press where it closed, then follow the hand (a real drag).
+      // The movement is measured on the PALM, which stays put while the fingers close (the knuckle or the fingertip would
+      // jump by tens of pixels and grab by themselves).
+      const a = this.fistArm.at, p0 = this.fistArm.palm;
+      if (Math.hypot((this.palm.x - p0.x) * this.screen.w, (this.palm.y - p0.y) * this.screen.h) > FIST_DRAG_PX) {
+        this.emit({ type: 'move', x: a.x, y: a.y, meta: this.meta });
+        this.emit({ type: 'down', button: 'left', meta: this.meta });
+        // a short still moment after the press (Windows needs it to "take" a title bar or a file), then the drag starts
+        this.pressed = 'left'; this.pressOwner = 'main'; this.pressT = t - Math.max(0, S.clicks.dragFreezeMs - FIST_SETTLE_MS);
+        this.freezePos = { ...a }; this.dragging = false; this.dragPos = { ...a };
+        this.fistBase = { cur: { ...a }, palm: { ...p0 } };
+        this.fistArm = null;
+      }
+    } else if (GRAB(pose) && this.pressed && this.pressOwner === 'main') {
       if (!this.dragging && t - this.pressT >= S.clicks.dragFreezeMs) { this.dragging = true; this.glide = this.freezePos ? { ...this.freezePos } : null; }
       if (this.dragging) {
         // The cursor has been held still since the pinch; the hand may be far from there now. Glide to it in small steps
         // instead of one jump: Windows starts a drag (window, file, selection) only after a few regular small moves.
-        let p = this.ptr;
+        // With a fist the cursor follows the palm (from where the fist took over), so closing the fingers moves nothing.
+        const fb = pose === 'fist' ? this.fistBase : null;
+        let p = fb ? { x: Math.min(1, Math.max(0, fb.cur.x + this.palm.x - fb.palm.x)), y: Math.min(1, Math.max(0, fb.cur.y + this.palm.y - fb.palm.y)) } : this.ptr;
         if (this.glide) {
           const dx = (p.x - this.glide.x) * this.screen.w, dy = (p.y - this.glide.y) * this.screen.h;
           const d = Math.hypot(dx, dy);
           if (d <= GLIDE_STEP_PX) this.glide = null;
           else { this.glide = { x: this.glide.x + (p.x - this.glide.x) * (GLIDE_STEP_PX / d), y: this.glide.y + (p.y - this.glide.y) * (GLIDE_STEP_PX / d) }; p = this.glide; }
         }
+        this.dragPos = { x: p.x, y: p.y };
         this.emit({ type: 'move', x: p.x, y: p.y, meta: this.meta });
       }
     } else if (pose === 'scroll') {

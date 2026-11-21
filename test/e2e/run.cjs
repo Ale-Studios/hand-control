@@ -65,7 +65,7 @@ setTimeout(() => { console.error('Test TIMEOUT: exiting'); try { require('../../
   // ── log of what the app sends to the mouse (for timing) ──
   const injected = [];
   api.on('input', (m, done, tMain) => injected.push({ ...m, done, tMain }));
-  api.setSettings({ control: { pointAt: 'knuckle' }, actions: { fist: 'none' } });
+  api.setSettings({ control: { pointAt: 'knuckle' }, actions: { pinkyPinch: 'none' } });
   const modeLog = [];
   api.on('mode', (m, reason, source) => modeLog.push({ m, reason, source, t: api.nowMs() }));
 
@@ -260,11 +260,13 @@ setTimeout(() => { console.error('Test TIMEOUT: exiting'); try { require('../../
   }
   if (ALL) {
 
-  // 11) the closed fist is an action now, never a lock (the action itself is tested in the 'fist' section)
+  // 11) the closed fist grabs and drags (tested in 'windrag'); held still it does nothing, and it is never a lock
   await drive(2300, () => hand('open')); await waitMode('active');
   await drive(300, () => hand('point'));
+  m0 = mark();
   await drive(1400, () => hand('fist'));
-  check('closed fist held still does NOT lock', api.mode === 'active');
+  await drive(300, () => hand('point'));
+  check('closed fist held still does NOT lock and clicks nothing', api.mode === 'active' && !since(m0).some((e) => e.type === 'mousedown'));
   api.setMode('paused', 'test', 'ui');
 
   // 12) auto-pause when the hand disappears
@@ -384,10 +386,10 @@ setTimeout(() => { console.error('Test TIMEOUT: exiting'); try { require('../../
   check('…and the arrow is visible at the end of the test', !input.cursorHidden);
   await ensureActive();
   }
-  if (want('fist') || ALL) {
-  // 12d) closed fist held still = minimise the window under the cursor (a real window of another process)
+  if (want('minimise') || ALL) {
+  // 12d) thumb + little finger held = minimise the window under the cursor (a real window of another process)
   await ensureActive();
-  api.setSettings({ actions: { fist: 'window:minimize', fistHoldMs: 600 } });
+  api.setSettings({ actions: { pinkyPinch: 'window:minimize', holdMs: 500 } });
   const { spawn } = require('child_process');
   const koffi = require('koffi');
   const u32 = koffi.load('user32.dll');
@@ -399,7 +401,7 @@ setTimeout(() => { console.error('Test TIMEOUT: exiting'); try { require('../../
   child.stdout.on('data', (d) => { for (const l of String(d).split(/\r?\n/)) if (l.startsWith('BOUNDS ')) bounds = JSON.parse(l.slice(7)); });
   for (let i = 0; i < 100 && !bounds; i++) await sleep(100);
   await sleep(600);
-  if (!bounds) { check('fist: the test window started', false, 'no BOUNDS line from the child'); }
+  if (!bounds) { check('minimise: the test window started', false, 'no BOUNDS line from the child'); }
   else {
     const pt = screen.dipToScreenPoint({ x: bounds.x + 190, y: bounds.y + 120 });
     const sx = pt.x / (input.screen.w - 1), sy = pt.y / (input.screen.h - 1);
@@ -407,16 +409,16 @@ setTimeout(() => { console.error('Test TIMEOUT: exiting'); try { require('../../
     check('the test window can be found', !!hw());
     await drive(1100, () => hand('point', sx, sy)); await sleep(100);
     check('the cursor is over the test window', near(cursor(), pt, 8), 'cursor ' + cursor().x + ',' + cursor().y);
-    await drive(250, () => hand('fist', sx, sy));
+    await drive(250, () => hand('pinkypinch', sx, sy));
     await sleep(100);
-    check('a fist held for a moment is not enough yet', !IsIconic(hw()));
-    await drive(1000, () => hand('fist', sx, sy)); await sleep(500);
-    check('a fist held still MINIMISES the window under the cursor', !!hw() && IsIconic(hw()));
-    check('…and control stays ACTIVE (a fist is not a lock)', api.mode === 'active');
-    // the desktop / taskbar is never touched: nothing is under the cursor at the very bottom edge of the screen
+    check('thumb + little finger for a moment is not enough yet', !IsIconic(hw()));
+    await drive(900, () => hand('pinkypinch', sx, sy)); await sleep(500);
+    check('thumb + little finger held MINIMISES the window under the cursor', !!hw() && IsIconic(hw()));
+    check('…and control stays ACTIVE', api.mode === 'active');
+    await drive(300, () => hand('point', sx, sy));
   }
   try { child.kill(); } catch { /* ok */ }
-  api.setSettings({ actions: { fist: 'none' } });
+  api.setSettings({ actions: { pinkyPinch: 'none' } });
   await sleep(300);
   }
   if (want('auto') || ALL) {
@@ -462,6 +464,19 @@ setTimeout(() => { console.error('Test TIMEOUT: exiting'); try { require('../../
     check('the cursor can be steered onto a title bar', near(cOn, grab, 8), 'cursor ' + cOn.x + ',' + cOn.y + ' title bar ' + Math.round(grab.x) + ',' + Math.round(grab.y));
     check('a pinch held on a title bar drags the whole window (moved ~300,150)', Math.abs(mx - 300) <= 60 && Math.abs(my - 150) <= 60, 'window moved by ' + mx + ',' + my + ' px');
     check('…and it is dropped when the pinch opens (window stays put afterwards)', stayed && !input.isDown(1));
+
+    // the same with a closed FIST: close the hand on the title bar, carry, open the hand
+    const s2 = { ...lastBounds };
+    const grab2 = screen.dipToScreenPoint({ x: s2.x + 190, y: s2.y + 30 });
+    const drop2 = { x: grab2.x - 250, y: grab2.y + 120 };
+    const [g2x, g2y] = sxy(grab2), [d2x, d2y] = sxy(drop2);
+    await drive(1200, () => hand('point', g2x, g2y)); await sleep(100);
+    await drive(1800, (ms) => { const k = Math.min(1, Math.max(0, (ms - 450) / 900)); return hand('fist', g2x + (d2x - g2x) * k, g2y + (d2y - g2y) * k); });
+    await drive(500, () => hand('point', d2x, d2y)); await sleep(500);
+    const e2 = lastBounds;
+    const fx = Math.round((e2.x - s2.x) * sf), fy = Math.round((e2.y - s2.y) * sf);
+    check('a closed FIST moved over a title bar grabs and drags the window (moved ~-250,120)', Math.abs(fx + 250) <= 60 && Math.abs(fy - 120) <= 60, 'window moved by ' + fx + ',' + fy + ' px');
+    check('…and opening the hand drops it', !input.isDown(1));
   }
   try { child.kill(); } catch { /* ok */ }
   await sleep(300);

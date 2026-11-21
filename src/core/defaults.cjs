@@ -2,7 +2,7 @@
 // the renderer receives them over IPC.
 
 const DEFAULTS = {
-  version: 4,            // 2 = simple mode (one hand, palm steers, starts when the hand is seen); 4 = see-through window background
+  version: 5,            // 2 = simple mode; 4 = see-through window background; 5 = the fist drags, thumb + little finger minimises
   camera: {
     deviceId: '',          // empty = default camera
     distance: 'near',      // near | mid | far  (see DISTANCE_PRESETS)
@@ -44,9 +44,8 @@ const DEFAULTS = {
   actions: {
     holdMs: 500,                          // how long an action gesture is held before it fires
     ringPinch: 'launcher',                // thumb + ring finger
-    pinkyPinch: 'keys:<cmd>+<tab>',       // thumb + little finger
-    fist: 'window:minimize',              // closed fist held still: minimise the window under the cursor
-    fistHoldMs: 600,
+    pinkyPinch: 'window:minimize',        // thumb + little finger: minimise the window under the cursor
+                                          // (the closed fist grabs and drags: it has no action of its own)
     // The launcher tiles: [name, action]. Actions: open:TARGET | keys:COMBO | zoom:in | zoom:out | media:NAME | launcher | none
     tiles: [
       ['Files', 'open:explorer'],

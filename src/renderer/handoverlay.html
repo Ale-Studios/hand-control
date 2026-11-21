@@ -160,7 +160,7 @@ function drawScene() {
       const hp = H.helperPose === 'pinch';
       drawDot(f.helper.screen.x * innerWidth, f.helper.screen.y * innerHeight, hp, false, false, scale, hp ? '#ff7a75' : col[1], true);
     }
-    const grab = !!H.pressed;
+    const grab = !!H.pressed || !!H.grabArmed; // a closed fist is ready to grab: shown like a grab
     const active = H.mode === 'active';
     const glow = grab ? '#ff7a75' : active ? '#3ddc97' : col[1];
     const r = drawDot(cx, cy, grab, !!H.dragging, active, scale, glow, false);

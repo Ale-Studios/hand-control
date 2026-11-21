@@ -49,10 +49,10 @@ class Actions {
     this.lastRun = 0;
   }
 
-  /** Gesture → bound action. `which` is "ring", "pinky" or "fist". */
+  /** Gesture → bound action. `which` is "ring" or "pinky". */
   runGesture(which) {
     const a = this.d.getSettings().actions;
-    const text = which === 'ring' ? a.ringPinch : which === 'fist' ? a.fist : a.pinkyPinch;
+    const text = which === 'ring' ? a.ringPinch : a.pinkyPinch;
     const now = Date.now();
     if (now - this.lastRun < 400) return false; // never twice in a blink
     this.lastRun = now;
