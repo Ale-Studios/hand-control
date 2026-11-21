@@ -41,9 +41,25 @@ html.glass .strip, html.glass .card { background: transparent; }
 ::-webkit-scrollbar { width: 8px; } ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, .14); border-radius: 4px; }
 
-/* the header doubles as the window title bar: drag it to move the window; the right padding leaves room for the Windows buttons */
-header { display: flex; align-items: center; gap: 14px; height: 46px; padding: 0 156px 0 18px; border-bottom: 1px solid var(--line); -webkit-app-region: drag; }
-header .btn, header .chip { -webkit-app-region: no-drag; }
+/* the header doubles as the window title bar: drag it to move the window, double-click it to maximise */
+header { display: flex; align-items: center; gap: 14px; height: 46px; padding: 0 0 0 18px; border-bottom: 1px solid var(--line); -webkit-app-region: drag; }
+header .btn, header .chip, .winbtns { -webkit-app-region: no-drag; }
+/* our own minimise / maximise / close buttons */
+.winbtns { display: flex; align-self: stretch; margin-left: 4px; }
+.winbtns button { width: 46px; border: 0; background: none; color: var(--silver); cursor: pointer; display: grid; place-items: center; transition: background .12s; }
+.winbtns button:hover { background: rgba(255, 255, 255, .1); }
+.winbtns button.close:hover { background: #c42b1c; color: #fff; }
+.winbtns svg { width: 10px; height: 10px; fill: none; stroke: currentColor; stroke-width: 1; shape-rendering: crispEdges; }
+/* edge grab areas for resizing */
+#resizers .rz { position: fixed; z-index: 1000; -webkit-app-region: no-drag; }
+#resizers .rz[data-e="n"] { top: 0; left: 8px; right: 8px; height: 5px; cursor: ns-resize; }
+#resizers .rz[data-e="s"] { bottom: 0; left: 8px; right: 8px; height: 6px; cursor: ns-resize; }
+#resizers .rz[data-e="e"] { right: 0; top: 8px; bottom: 8px; width: 6px; cursor: ew-resize; }
+#resizers .rz[data-e="w"] { left: 0; top: 8px; bottom: 8px; width: 6px; cursor: ew-resize; }
+#resizers .rz[data-e="nw"] { left: 0; top: 0; width: 8px; height: 8px; cursor: nwse-resize; }
+#resizers .rz[data-e="se"] { right: 0; bottom: 0; width: 10px; height: 10px; cursor: nwse-resize; }
+#resizers .rz[data-e="ne"] { right: 0; top: 0; width: 8px; height: 8px; cursor: nesw-resize; }
+#resizers .rz[data-e="sw"] { left: 0; bottom: 0; width: 10px; height: 10px; cursor: nesw-resize; }
 .brand { display: flex; align-items: center; gap: 10px; font: 300 15px var(--font); letter-spacing: .32em; color: var(--silver); }
 .brand b { font-weight: 300; }
 .brand small { color: var(--muted); font: 10px var(--mono); letter-spacing: .06em; }

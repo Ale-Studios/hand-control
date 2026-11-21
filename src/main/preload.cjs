@@ -18,6 +18,7 @@ contextBridge.exposeInMainWorld('hc', {
   log: (t) => ipcRenderer.send('log', t),
   hide: () => ipcRenderer.send('window:hide'),
   quit: () => ipcRenderer.send('window:quit'),
+  winCtl: (what, edge) => ipcRenderer.send('window:ctl', { what, edge }), // minimise / maximise / resize from our own title bar
   saveMeasure: (o) => ipcRenderer.invoke('measure:save', o),
   openMeasures: () => ipcRenderer.send('measure:open-folder'),
   on: {
@@ -30,6 +31,7 @@ contextBridge.exposeInMainWorld('hc', {
     blocked: (cb) => on('blocked', cb),
     realMouse: (cb) => on('real-mouse', cb),
     glass: (cb) => on('glass', cb),
+    winState: (cb) => on('win-state', cb),
     handOverlay: (cb) => on('hand-overlay', cb),
     e2eFrame: (cb) => on('e2e:frame', cb),
   },

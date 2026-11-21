@@ -144,18 +144,54 @@ export class Tracker {
     catch (e) { console.warn('GPU not available, using the CPU', e); this.landmarker = await make('CPU'); this.delegate = 'CPU'; }
   }
 
+  // Frames are read straight from the camera track (MediaStreamTrackProcessor), NOT from the <video> on the page: a video
+  // element is only "painted" while its window is on screen, so with the window minimised it would deliver ~1 frame per
+  // second and the cursor would stop. The page video is only the preview. (Older engines: fall back to the video callbacks.)
   _schedule() {
     if (!this.running) return;
-    this.vfc = this.video.requestVideoFrameCallback((now, meta) => {
-      this._frame(now, meta);
-      this._schedule();
-    });
+    if (this._startReader()) return;
+    const loop = () => {
+      if (!this.running) return;
+      this.vfc = this.video.requestVideoFrameCallback((now, meta) => {
+        const tCap = meta && typeof meta.captureTime === 'number' ? meta.captureTime : (meta && meta.receiveTime) || now;
+        this._frame(this.video, this.video.videoWidth, this.video.videoHeight, tCap);
+        loop();
+      });
+    };
+    loop();
   }
 
-  _frame(now, meta) {
+  _startReader() {
+    const track = this.stream && this.stream.getVideoTracks()[0];
+    if (typeof MediaStreamTrackProcessor !== 'function' || !track) return false;
+    let reader;
+    try {
+      this.procTrack = track.clone();
+      reader = new MediaStreamTrackProcessor({ track: this.procTrack, maxBufferSize: 1 }).readable.getReader();
+    } catch (e) {
+      console.warn('frame reader not available, using the video element', e);
+      if (this.procTrack) { try { this.procTrack.stop(); } catch { /* ok */ } this.procTrack = null; }
+      return false;
+    }
+    this.reader = reader;
+    (async () => {
+      while (this.running && this.reader === reader) {
+        let r;
+        try { r = await reader.read(); } catch { break; }
+        if (r.done) break;
+        const f = r.value;
+        try {
+          const now = performance.now(), ts = f.timestamp / 1000; // µs → ms; on the page clock for camera frames
+          this._frame(f, f.displayWidth, f.displayHeight, Math.abs(now - ts) < 1000 && ts <= now ? ts : now);
+        } finally { f.close(); }
+      }
+    })();
+    return true;
+  }
+
+  /** src = a VideoFrame from the camera (or the <video>); W×H its size; tCap = when the camera took it (page clock, ms). */
+  _frame(src, W, H, tCap) {
     if (this.busy || !this.landmarker) return;
-    const v = this.video;
-    const W = v.videoWidth, H = v.videoHeight;
     if (!W || !H) return;
     this.busy = true;
     const tStart = performance.now();
@@ -165,7 +201,7 @@ export class Tracker {
       const s = Math.min(1, MAX_SIDE / Math.max(roi.w, roi.h));
       const cw = Math.max(32, Math.round(roi.w * s)), ch = Math.max(32, Math.round(roi.h * s));
       if (this.canvas.width !== cw || this.canvas.height !== ch) { this.canvas.width = cw; this.canvas.height = ch; }
-      this.ctx.drawImage(v, roi.x, roi.y, roi.w, roi.h, 0, 0, cw, ch);
+      this.ctx.drawImage(src, roi.x, roi.y, roi.w, roi.h, 0, 0, cw, ch);
 
       const res = this.follower
         ? this.landmarker.detect(this.canvas)
@@ -184,7 +220,6 @@ export class Tracker {
       if (this.follower) { if (hands.length) this.follower.seen(hands[0].lm, W, H); else this.follower.lost(); }
 
       const origin = performance.timeOrigin;
-      const tCap = meta && typeof meta.captureTime === 'number' ? meta.captureTime : (meta && meta.receiveTime) || now;
       this.hooks.onFrame({
         t: tCap,
         hands,
@@ -208,6 +243,8 @@ export class Tracker {
     this.running = false;
     if (this.vfc != null && this.video.cancelVideoFrameCallback) { try { this.video.cancelVideoFrameCallback(this.vfc); } catch { /* ok */ } }
     this.vfc = null;
+    if (this.reader) { const r = this.reader; this.reader = null; try { await r.cancel(); } catch { /* ok */ } }
+    if (this.procTrack) { try { this.procTrack.stop(); } catch { /* ok */ } this.procTrack = null; }
     if (this.landmarker) { try { this.landmarker.close(); } catch { /* ok */ } this.landmarker = null; }
     if (this.stream) { this.stream.getTracks().forEach((t) => t.stop()); this.stream = null; }
     this.video.srcObject = null;

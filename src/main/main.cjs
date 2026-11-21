@@ -222,9 +222,9 @@ function createWindow() {
   win = new BrowserWindow({
     width: 1180, height: 780, minWidth: 940, minHeight: 640,
     title: 'Hand Control',
-    // frameless look: our own header is the title bar; Windows still draws the minimise/maximise/close buttons on top of it
+    // frameless look: our own header is the title bar, with our own minimise / maximise / close buttons. (A transparent window has
+    // no system frame, so the Windows buttons, the double-click on the title bar and the edge resizing are handled by the app.)
     titleBarStyle: 'hidden',
-    titleBarOverlay: { color: '#00000000', symbolColor: '#cfd6de', height: 46 },
     transparent: SEE_THROUGH,
     backgroundColor: SEE_THROUGH ? '#00000000' : '#16181b',
     icon: path.join(__dirname, '..', '..', 'assets', 'icon.png'),
@@ -245,6 +245,11 @@ function createWindow() {
   // too, so "last window closed" would never happen on its own.) "Hide to tray" is a separate button.
   win.on('close', () => { quitting = true; app.quit(); });
   win.on('closed', () => { win = null; });
+  const winState = () => send('win-state', { max: !!(win && !win.isDestroyed() && win.isMaximized()), see: SEE_THROUGH });
+  win.on('maximize', winState); win.on('unmaximize', winState); win.on('restore', winState);
+  win.webContents.on('did-finish-load', winState);
+  // double-click on the title bar = maximise / restore (Windows does not do it for a frameless transparent window)
+  if (SEE_THROUGH) win.hookWindowMessage(0x00A3 /* WM_NCLBUTTONDBLCLK */, () => setImmediate(toggleMaximize));
   if (flag('--dev')) win.webContents.openDevTools({ mode: 'detach' });
   if (E2E || BENCH || flag('--verbose')) {
     // page messages show up in the terminal (handy to find out what is wrong)
@@ -311,6 +316,33 @@ function syncHandOverlay() {
     send('hand-overlay', true);
   });
   w.on('closed', () => { if (handOv === w) handOv = null; });
+}
+function toggleMaximize() {
+  if (!win || win.isDestroyed()) return;
+  if (win.isMaximized()) win.unmaximize(); else win.maximize();
+  send('win-state', { max: win.isMaximized(), see: SEE_THROUGH });
+}
+// Resizing from the edges of the window: the page reports which edge was grabbed, then the window follows the mouse until the
+// left button is released.
+let resizeTimer = null;
+function startResize(edge) {
+  if (!win || win.isDestroyed() || win.isMaximized() || resizeTimer || !/^(n|s|e|w|ne|nw|se|sw)$/.test(edge)) return;
+  const b0 = win.getBounds(), p0 = screen.getCursorScreenPoint();
+  const [minW, minH] = win.getMinimumSize();
+  const t0 = Date.now();
+  resizeTimer = setInterval(() => {
+    // stop when the button is up (after a short grace, so a quick click is still read as "down"), or as a safety net after 2 min
+    if (!win || win.isDestroyed() || (Date.now() - t0 > 80 && !input.isDown(0x01)) || Date.now() - t0 > 120000) {
+      clearInterval(resizeTimer); resizeTimer = null; return;
+    }
+    const p = screen.getCursorScreenPoint(), dx = p.x - p0.x, dy = p.y - p0.y;
+    let { x, y, width, height } = b0;
+    if (edge.includes('e')) width = Math.max(minW, b0.width + dx);
+    if (edge.includes('s')) height = Math.max(minH, b0.height + dy);
+    if (edge.includes('w')) { width = Math.max(minW, b0.width - dx); x = b0.x + b0.width - width; }
+    if (edge.includes('n')) { height = Math.max(minH, b0.height - dy); y = b0.y + b0.height - height; }
+    win.setBounds({ x, y, width, height });
+  }, 16);
 }
 // the main window: floats above the other apps when asked
 function applyTop() {
@@ -470,6 +502,12 @@ function wireIpc() {
   ipcMain.on('log', (e, text) => { if (fromMain(e)) { addLog(String(text).slice(0, 200)); api.emit('log', String(text)); } });
   ipcMain.on('window:hide', (e) => { if (fromMain(e) && win) { win.hide(); addLog('Window hidden: control keeps running from the system tray'); } });
   ipcMain.on('window:quit', (e) => { if (fromMain(e)) { quitting = true; app.quit(); } });
+  ipcMain.on('window:ctl', (e, m) => {
+    if (!fromMain(e) || !win || win.isDestroyed() || !m) return;
+    if (m.what === 'min') win.minimize();
+    else if (m.what === 'max') toggleMaximize();
+    else if (m.what === 'resize') startResize(String(m.edge || ''));
+  });
 
   ipcMain.handle('measure:save', (e, obj) => {
     if (!fromMain(e)) return null;

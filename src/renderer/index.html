@@ -17,7 +17,17 @@
   <button id="btnKill" class="btn danger" title="Stops EVERYTHING right now. Works even when the app is in the background.">⛔ EMERGENCY LOCK</button>
   <button id="btnHide" class="btn" title="Hides the window; control keeps running. Bring it back from the tray icon next to the clock.">Hide to tray</button>
   <button id="btnQuit" class="btn" title="Quit Hand Control completely: turns the camera off and releases the mouse.">Quit</button>
+  <div class="winbtns">
+    <button id="wMin" title="Minimise"><svg viewBox="0 0 10 10"><path d="M1 5.5h8"/></svg></button>
+    <button id="wMax" title="Maximise"><svg viewBox="0 0 10 10"><rect x="1" y="1" width="8" height="8"/></svg></button>
+    <button id="wClose" class="close" title="Close (quits Hand Control)"><svg viewBox="0 0 10 10"><path d="M1 1l8 8M9 1l-8 8"/></svg></button>
+  </div>
 </header>
+<!-- grab areas on the window edges, to resize it (a see-through window has no system frame) -->
+<div id="resizers" hidden>
+  <div class="rz" data-e="n"></div><div class="rz" data-e="s"></div><div class="rz" data-e="e"></div><div class="rz" data-e="w"></div>
+  <div class="rz" data-e="nw"></div><div class="rz" data-e="ne"></div><div class="rz" data-e="sw"></div><div class="rz" data-e="se"></div>
+</div>
 
 <main>
   <section class="stage">

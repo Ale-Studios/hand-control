@@ -654,6 +654,20 @@ async function init() {
   $('btnKill').onclick = () => hc.setMode(mode === 'locked' ? 'paused' : 'locked', mode === 'locked' ? 'unlocked from the button' : 'EMERGENCY LOCK (button)', 'ui');
   $('btnHide').onclick = () => hc.hide();
   $('btnQuit').onclick = () => hc.quit();
+  // our own window buttons and edge resizing (the see-through window has no system frame)
+  $('wMin').onclick = () => hc.winCtl('min');
+  $('wMax').onclick = () => hc.winCtl('max');
+  $('wClose').onclick = () => hc.quit();
+  for (const el of document.querySelectorAll('#resizers .rz')) {
+    el.addEventListener('mousedown', (ev) => { if (ev.button === 0) { ev.preventDefault(); hc.winCtl('resize', el.dataset.e); } });
+  }
+  hc.on.winState((s) => {
+    $('resizers').hidden = !s.see || s.max;
+    $('wMax').title = s.max ? 'Restore' : 'Maximise';
+    $('wMax').innerHTML = s.max
+      ? '<svg viewBox="0 0 10 10"><rect x="1" y="3" width="6" height="6"/><path d="M3 3V1h6v6H7"/></svg>'
+      : '<svg viewBox="0 0 10 10"><rect x="1" y="1" width="8" height="8"/></svg>';
+  });
   $('btnCam').onclick = () => (cameraOn ? stopCamera() : startCamera());
   $('btnCalib').onclick = calStart;
   $('calibCancel').onclick = () => { calStop(); hc.log('Calibration cancelled'); };
