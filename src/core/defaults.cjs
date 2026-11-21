@@ -2,7 +2,7 @@
 // the renderer receives them over IPC.
 
 const DEFAULTS = {
-  version: 2,            // 2 = simple mode: one hand, palm steers, control starts as soon as the hand is seen
+  version: 3,            // 2 = simple mode (one hand, palm steers, starts when the hand is seen); 3 = see-through window and hand
   camera: {
     deviceId: '',          // empty = default camera
     distance: 'near',      // near | mid | far  (see DISTANCE_PRESETS)
@@ -72,7 +72,8 @@ const DEFAULTS = {
     alwaysOnTop: true,     // the window floats above the other apps (transparent, so you still see them)
     handOverlay: true,     // draw the hand on the screen, above every window (click-through)
     overlaySize: 260,      // height of the hand drawn on screen, in pixels
-    overlayOpacity: 0.9,   // opacity of the hand drawn on screen
+    windowOpacity: 0.78,   // opacity of this window as a whole (lower = you see more of the apps under it)
+    overlayOpacity: 0.6,   // opacity of the hand drawn on screen (see-through, so it never hides what is under it)
     handStyle: 'pointer',  // pointer = a hand-shaped cursor | skeleton = the full tracked hand
     hideCursor: true,      // hide the Windows arrow while the hand is the cursor (always restored when control stops)
   },

@@ -497,9 +497,10 @@ setTimeout(() => { console.error('Test TIMEOUT: exiting'); try { require('../../
     const ov = api.handOverlay();
     const img = await ov.webContents.capturePage();
     const bmp = img.toBitmap(); const sz = img.getSize();
-    let minx = 1e9, miny = 1e9, maxx = -1, maxy = -1, opaque = 0;
+    let minx = 1e9, miny = 1e9, maxx = -1, maxy = -1, opaque = 0, maxA = 0;
     for (let y = 0; y < sz.height; y++) for (let x = 0; x < sz.width; x++) {
-      if (bmp[(y * sz.width + x) * 4 + 3] > 40) { opaque++; if (x < minx) minx = x; if (x > maxx) maxx = x; if (y < miny) miny = y; if (y > maxy) maxy = y; }
+      const a = bmp[(y * sz.width + x) * 4 + 3]; if (a > maxA) maxA = a;
+      if (a > 40) { opaque++; if (x < minx) minx = x; if (x > maxx) maxx = x; if (y < miny) miny = y; if (y > maxy) maxy = y; }
     }
     const wantSize = api.settings().ui.overlaySize, bh = maxy - miny;
     const cur = { x: 0.6 * sz.width, y: 0.45 * sz.height };
@@ -509,6 +510,9 @@ setTimeout(() => { console.error('Test TIMEOUT: exiting'); try { require('../../
     check(pointerStyle ? 'the hand pointer is drawn on the screen, its fingertip on the cursor' : 'the hand is drawn on the screen around the cursor, at about the chosen size',
       opaque > (pointerStyle ? 200 : 500) && cur.x >= minx - 4 && cur.x <= maxx + 4 && cur.y >= miny - 4 && cur.y <= maxy + 4 && (pointerStyle ? (bh > 30 && bh < 220) : (bh > wantSize * 0.6 && bh < wantSize * 1.6)),
       'drawn box ' + (maxx - minx) + 'x' + bh + ' px, cursor at ' + Math.round(cur.x) + ',' + Math.round(cur.y) + ', wanted height ~' + wantSize);
+    const wantA = api.settings().ui.overlayOpacity * 255;
+    check('the hand on screen is see-through (never more opaque than the chosen opacity)', maxA > 40 && maxA <= wantA + 8,
+      'most opaque pixel ' + maxA + '/255, chosen opacity ' + Math.round(wantA) + '/255');
     await drive(500, () => big('pinch', 0.6, 0.5));
     fs.writeFileSync(out.replace('.png', '-hud-pinch.png'), (await api.win().webContents.capturePage()).toPNG());
     await drive(500, () => big('scroll', 0.5, 0.5));

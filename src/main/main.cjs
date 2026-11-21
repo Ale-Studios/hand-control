@@ -73,11 +73,16 @@ function loadSettings() {
   settingsFile = path.join(app.getPath('userData'), 'settings.json');
   try {
     const raw = JSON.parse(fs.readFileSync(settingsFile, 'utf8'));
-    if (raw.version !== 2) { // settings saved before simple mode: switch to it (one hand, palm steers, starts when the hand is seen)
+    const v = Number(raw.version) || 1;
+    if (v < 2) { // settings saved before simple mode: switch to it (one hand, palm steers, starts when the hand is seen)
       raw.control = { ...raw.control, pointAt: 'palm', twoHands: false };
       raw.safety = { ...raw.safety, autoActivate: true };
-      raw.version = 2;
     }
+    if (v < 3) { // see-through look: the window and the hand pointer let you see what is under them
+      const o = Number(raw.ui && raw.ui.overlayOpacity);
+      raw.ui = { ...raw.ui, overlayOpacity: Number.isFinite(o) ? Math.min(o, DEFAULTS.ui.overlayOpacity) : DEFAULTS.ui.overlayOpacity };
+    }
+    raw.version = DEFAULTS.version;
     settings = merge(DEFAULTS, raw);
   } catch { settings = merge(DEFAULTS, {}); }
   settings.control.area = enforceMinArea(settings.control.area); // a saved area that is too small is enlarged
@@ -242,6 +247,7 @@ function createWindow() {
   Menu.setApplicationMenu(null);
   win.loadURL('hc://app/index.html');
   applyTop();
+  applyOpacity();
   // The X closes the whole program like in any normal app. (The status badge, the launcher and the hand layer are windows
   // too, so "last window closed" would never happen on its own.) "Hide to tray" is a separate button.
   win.on('close', () => { quitting = true; app.quit(); });
@@ -316,6 +322,13 @@ function syncHandOverlay() {
 // the main window: floats above the other apps when asked
 function applyTop() {
   if (win && !win.isDestroyed()) win.setAlwaysOnTop(!!settings.ui.alwaysOnTop, 'floating');
+}
+// the main window is see-through as a whole (text and camera too), so the apps under it stay visible. This works whether or
+// not the window has the focus (the glass material alone turns solid when the window is not active).
+function applyOpacity() {
+  if (!win || win.isDestroyed()) return;
+  const o = Number(settings.ui.windowOpacity);
+  win.setOpacity(E2E ? 1 : Math.min(1, Math.max(0.3, Number.isFinite(o) ? o : 1)));
 }
 
 function createOverlay() {
@@ -410,6 +423,7 @@ function wireIpc() {
     if (settings.control.display !== before.control.display) applyScreen();
     if (settings.ui.glass !== before.ui.glass) applyGlass();
     if (settings.ui.alwaysOnTop !== before.ui.alwaysOnTop) applyTop();
+    if (settings.ui.windowOpacity !== before.ui.windowOpacity) applyOpacity();
     if (settings.ui.handOverlay !== before.ui.handOverlay || settings.control.display !== before.control.display || settings.ui.overlaySize !== before.ui.overlaySize || settings.ui.overlayOpacity !== before.ui.overlayOpacity || settings.ui.hudColor !== before.ui.hudColor || settings.ui.trail !== before.ui.trail || settings.camera.mirror !== before.camera.mirror || settings.ui.handStyle !== before.ui.handStyle) syncHandOverlay();
     syncArrow();
     send('settings', settings);

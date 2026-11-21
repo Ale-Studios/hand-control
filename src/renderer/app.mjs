@@ -309,6 +309,7 @@ const SCHEMA = () => [
   { id: 'ui.overlaySize', type: 'range', min: 120, max: 500, step: 10, label: 'Size of the hand pointer on screen', fmt: (v) => v + ' px' },
   { id: 'ui.overlayOpacity', type: 'range', min: 0.3, max: 1, step: 0.05, label: 'Opacity of the hand on screen', fmt: (v) => Math.round(v * 100) + '%' },
   { id: 'ui.alwaysOnTop', type: 'check', label: 'Keep this window above the other apps (it is transparent)' },
+  { id: 'ui.windowOpacity', type: 'range', min: 0.3, max: 1, step: 0.05, label: 'Opacity of this window', fmt: (v) => Math.round(v * 100) + '%', help: 'Lower = you see more of the apps under this window. 100% = solid.' },
   { id: 'ui.showSkeleton', type: 'check', label: 'Show the hand skeleton' },
   { id: 'ui.showArea', type: 'check', label: 'Show the active area' },
   { g: 'Cursor' },
@@ -349,7 +350,8 @@ const SCHEMA = () => [
 
 let formBuilt = false;
 // Simple mode: only these settings are shown at first; "Show advanced settings" reveals the rest.
-const SIMPLE_IDS = new Set(['camera.deviceId', 'camera.distance', 'ui.handStyle', 'ui.hideCursor', 'ui.overlaySize', 'control.sensitivity',
+const SIMPLE_IDS = new Set(['camera.deviceId', 'camera.distance', 'ui.handStyle', 'ui.hideCursor', 'ui.overlaySize', 'ui.overlayOpacity',
+  'ui.windowOpacity', 'ui.alwaysOnTop', 'control.sensitivity',
   'control.smoothing', 'actions.ringPinch', 'actions.pinkyPinch', 'actions.fist', 'safety.autoActivate', 'safety.dryRun']);
 let showAdvanced = false;
 try { showAdvanced = localStorage.getItem('hc.advanced') === '1'; } catch { /* no storage: simple view */ }
