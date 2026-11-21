@@ -192,5 +192,6 @@ Ideas for later: [docs/FUTURE-IDEAS.md](docs/FUTURE-IDEAS.md).
 
 ## Licences
 
-Code: Ale Studios. Dependencies: Electron (MIT), koffi (MIT), MediaPipe Tasks Vision and the `hand_landmarker.task` model
-(Google, Apache 2.0).
+Hand Control is open source under the **MIT licence** — see [LICENSE](LICENSE). Dependencies: Electron (MIT), koffi (MIT),
+MediaPipe Tasks Vision and the `hand_landmarker.task` model (Google, Apache 2.0). Details in
+[THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
