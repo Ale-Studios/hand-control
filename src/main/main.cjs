@@ -251,6 +251,9 @@ function createWindow() {
   win.on('closed', () => { win = null; });
   const winState = () => send('win-state', { max: !!(win && !win.isDestroyed() && win.isMaximized()), see: SEE_THROUGH });
   win.on('maximize', winState); win.on('unmaximize', winState); win.on('restore', winState);
+  win.on('maximize', applyTop); win.on('unmaximize', applyTop);
+  // maximised = backdrop: when it gets the focus (a click on it, the taskbar) it goes straight back under the other apps
+  win.on('focus', () => { if (win && !win.isDestroyed() && win.isMaximized()) setTimeout(sendToBack, 0); });
   win.webContents.on('did-finish-load', winState);
   // double-click on the title bar = maximise / restore (Windows does not do it for a frameless transparent window)
   if (SEE_THROUGH) win.hookWindowMessage(0x00A3 /* WM_NCLBUTTONDBLCLK */, () => setImmediate(toggleMaximize));
@@ -324,6 +327,7 @@ function syncHandOverlay() {
 function toggleMaximize() {
   if (!win || win.isDestroyed()) return;
   if (win.isMaximized()) win.unmaximize(); else win.maximize();
+  applyTop();
   send('win-state', { max: win.isMaximized(), see: SEE_THROUGH });
 }
 // Resizing from the edges of the window: the page reports which edge was grabbed, then the window follows the mouse until the
@@ -349,8 +353,17 @@ function startResize(edge) {
   }, 16);
 }
 // the main window: floats above the other apps when asked
+// Normal size: the window floats above the other apps (if asked). Maximised: it becomes a see-through BACKDROP under every
+// other app, so the windows you open appear on top of it (and clicking it does not bring it over them).
 function applyTop() {
-  if (win && !win.isDestroyed()) win.setAlwaysOnTop(!!settings.ui.alwaysOnTop, 'floating');
+  if (!win || win.isDestroyed()) return;
+  const max = win.isMaximized();
+  win.setAlwaysOnTop(!max && !!settings.ui.alwaysOnTop, 'floating');
+  if (max) sendToBack();
+}
+function sendToBack() {
+  if (!win || win.isDestroyed() || !win.isMaximized()) return;
+  try { input.sendToBack(win.getNativeWindowHandle()); } catch (e) { console.warn('send to back', e); }
 }
 function createOverlay() {
   const wa = screen.getPrimaryDisplay().workArea;

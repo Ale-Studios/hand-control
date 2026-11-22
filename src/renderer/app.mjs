@@ -141,6 +141,9 @@ function refreshStats() {
   const d = stat.det.slice(-90);
   $('sDet').textContent = d.length ? Math.round((100 * d.reduce((a, b) => a + b, 0)) / d.length) + '%' : '—';
   $('sPose').textContent = lastHud ? POSE_EN[lastHud.pose] || '—' : '—';
+  // light up the quick-gesture row of the gesture being made
+  const qp = lastHud && lastHud.handVisible ? lastHud.pose : '';
+  for (const r of document.querySelectorAll('#quickGestures .qrow')) r.classList.toggle('on', r.dataset.pose === qp);
   if (!$('tab-measure').hidden) renderLive();
 }
 
@@ -306,7 +309,7 @@ const SCHEMA = () => [
   { id: 'ui.hideCursor', type: 'check', label: 'Hide the Windows arrow while the hand is the cursor', help: 'Only while control is ACTIVE and your hand is seen. It comes back at once on pause, lock, quit, when the hand is lost, or when you move the real mouse.' },
   { id: 'ui.overlaySize', type: 'range', min: 120, max: 500, step: 10, label: 'Size of the cursor on screen', fmt: (v) => v + ' px' },
   { id: 'ui.overlayOpacity', type: 'range', min: 0.3, max: 1, step: 0.05, label: 'Opacity of the hand on screen', fmt: (v) => Math.round(v * 100) + '%' },
-  { id: 'ui.alwaysOnTop', type: 'check', label: 'Keep this window above the other apps (it is transparent)' },
+  { id: 'ui.alwaysOnTop', type: 'check', label: 'Keep this window above the other apps (it is transparent)', help: 'When the window is maximised it becomes a see-through backdrop instead: the other apps open on top of it.' },
   { id: 'ui.windowOpacity', type: 'range', min: 0.1, max: 1, step: 0.05, label: 'Opacity of the window background', fmt: (v) => Math.round(v * 100) + '%', help: 'Lower = you see more of the apps under this window. Text, buttons and the camera view always stay solid.' },
   { id: 'ui.showSkeleton', type: 'check', label: 'Show the hand skeleton' },
   { id: 'ui.showArea', type: 'check', label: 'Show the active area' },
@@ -400,7 +403,7 @@ function fillCameraSelect(cams) {
 let patchTimer = null; let pendingPatch = {};
 function changeSetting(f, value) {
   setLocal(f.id, value);
-  if (f.id.startsWith('ui.')) applyUi();
+  if (f.id.startsWith('ui.') || f.id.startsWith('safety.')) applyUi();
   deepMerge(pendingPatch, patchFor(f.id, value));
   clearTimeout(patchTimer);
   patchTimer = setTimeout(async () => {
@@ -413,6 +416,8 @@ function changeSetting(f, value) {
 function deepMerge(a, b) { for (const k of Object.keys(b)) { if (b[k] && typeof b[k] === 'object') { a[k] = a[k] || {}; deepMerge(a[k], b[k]); } else a[k] = b[k]; } }
 function applyMirror() { $('viewport').classList.toggle('nomirror', !S.camera.mirror); applyUi(); }
 function applyUi() {
+  const sec = (ms) => (Number(ms) / 1000).toFixed(1) + ' s';
+  if ($('qAct')) { $('qAct').textContent = sec(S.safety.activateHoldMs); $('qPause').textContent = sec(S.safety.pauseHoldMs); }
   document.documentElement.dataset.hud = S.ui.hudColor;
   $('viewport').style.setProperty('--vdim', String(S.ui.videoDim));
   // see-through window: only the background fades; text, buttons and the camera view stay solid

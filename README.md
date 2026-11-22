@@ -38,7 +38,7 @@ buttons. The layer never intercepts a click or a key, and it keeps drawing when 
 look, size and opacity of the cursor, HUD colour. It has a thin dark outline so it stays visible on white pages as well as on dark windows.
 
 The main window **floats above the other apps** (*Keep this window above the other apps*) and its **background is see-through**, so you
-see the apps under it; text, buttons and the camera view stay solid (*Opacity of the window background*). Limits: the layer is not shown over games or videos in
+see the apps under it; text and buttons stay solid, the camera view is a little less see-through than the background (*Opacity of the window background*). **Maximised**, the window becomes a see-through backdrop instead: the apps you open appear on top of it, and clicking it does not bring it over them (double-click its title bar to restore it). The Controls tab lists the main gestures; the one you are making lights up. Limits: the layer is not shown over games or videos in
 "exclusive" full screen, and a screen share or screenshot will include the hand.
 
 ## Actions, launcher and two-hand mode

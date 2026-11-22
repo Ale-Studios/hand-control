@@ -44,6 +44,7 @@ const GetWindowLongPtrW = user32.func('intptr_t GetWindowLongPtrW(void *h, int i
 const GetClassNameW = user32.func('int GetClassNameW(void *h, _Out_ uint16_t *buf, int n)');
 const GetWindowTextW = user32.func('int GetWindowTextW(void *h, _Out_ uint16_t *buf, int n)');
 const PostMessageW = user32.func('bool PostMessageW(void *h, unsigned int m, uintptr_t w, intptr_t l)');
+const SetWindowPos = user32.func('bool SetWindowPos(void *h, intptr_t after, int x, int y, int cx, int cy, unsigned int flags)');
 const DwmGetWindowAttribute = koffi.load('dwmapi.dll').func('int DwmGetWindowAttribute(void *h, unsigned int attr, _Out_ int *v, unsigned int cb)');
 const SHELL_CLASSES = new Set(['Progman', 'WorkerW', 'Shell_TrayWnd', 'Shell_SecondaryTrayWnd']); // desktop and taskbar: never touched
 const wtext = (fn, h) => { const b = new Uint16Array(256); const n = fn(h, b, 256); return n > 0 ? Buffer.from(b.buffer, 0, n * 2).toString('utf16le') : ''; };
@@ -162,6 +163,12 @@ class Input {
   }
 
   /** true while the physical mouse has been used recently (control gives way, the arrow must be visible again). */
+  /** Puts a window (native handle Buffer from Electron) at the BOTTOM of the z-order, under every other app, without activating it. */
+  sendToBack(handleBuf) {
+    const hwnd = koffi.decode(handleBuf, 'void *'); // the buffer holds the HWND value
+    return SetWindowPos(hwnd, 1 /* HWND_BOTTOM */, 0, 0, 0, 0, 0x0213 /* NOSIZE|NOMOVE|NOACTIVATE|NOOWNERZORDER */);
+  }
+
   suspended(now = Date.now()) { return now < this.suspendUntil; }
 
   virtual() {

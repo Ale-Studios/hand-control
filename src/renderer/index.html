@@ -62,13 +62,18 @@
 
     <div class="tab" id="tab-commands">
       <div class="card">
-        <h3>Getting started</h3>
-        <ol class="steps">
-          <li>Stand 1–3 m from the camera and <b>show your hand</b>: control starts by itself (the status turns green).</li>
-          <li>Move your hand: the round dot on screen <b>is</b> your cursor.</li>
-          <li>Not accurate? <b>Calibrate</b> the movement area (below).</li>
-          <li>To pause: hold an <b>open hand still</b>. To stop everything: the red button or the keyboard shortcut.</li>
-        </ol>
+        <h3>Gestures</h3>
+        <div class="qg" id="quickGestures">
+          <div class="qrow key" data-pose="open"><span class="qi">🖐️</span><div><b>Open hand, held still</b><small>Activate (<span id="qAct">1.6 s</span>) or pause (<span id="qPause">0.9 s</span>): watch the bar fill up. At start, control turns on by itself when your hand is seen</small></div></div>
+          <div class="qrow" data-pose="point"><span class="qi">☝️</span><div><b>Move your hand</b><small>Moves the round dot: that is your cursor</small></div></div>
+          <div class="qrow" data-pose="pinch"><span class="qi">🤏</span><div><b>Pinch thumb + index</b><small>Click · two quick pinches = double click</small></div></div>
+          <div class="qrow" data-pose="fist"><span class="qi">✊</span><div><b>Fist + move</b><small>Grab and drag (folders, windows) · open the hand to drop</small></div></div>
+          <div class="qrow" data-pose="rclick"><span class="qi">🤌</span><div><b>Pinch thumb + middle</b><small>Right click</small></div></div>
+          <div class="qrow" data-pose="scroll"><span class="qi">✌️</span><div><b>Index + middle up</b><small>Scroll: move the hand up or down</small></div></div>
+          <div class="qrow" data-pose="pinkypinch"><span class="qi">🤙</span><div><b>Thumb + little finger, held</b><small>Minimise the window under the cursor (index up)</small></div></div>
+          <div class="qrow" data-pose="ringpinch"><span class="qi">👌</span><div><b>Thumb + ring finger, held</b><small>Launcher with big tiles (index up)</small></div></div>
+        </div>
+        <p class="hint">Stand 1–3 m from the camera. Not accurate? Calibrate the movement area. To stop everything: the red button or the keyboard shortcut.</p>
         <div class="row"><button id="btnCalib" class="btn primary">🎯 Calibrate the movement area</button></div>
         <div class="row"><button id="btnCam" class="btn">Turn camera off</button></div>
       </div>
