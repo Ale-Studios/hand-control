@@ -64,14 +64,14 @@
       <div class="card">
         <h3>Gestures</h3>
         <div class="qg" id="quickGestures">
-          <div class="qrow key" data-pose="open"><span class="qi">🖐️</span><div><b>Open hand, held still</b><small>Activate (<span id="qAct">1.6 s</span>) or pause (<span id="qPause">0.9 s</span>): watch the bar fill up. At start, control turns on by itself when your hand is seen</small></div></div>
-          <div class="qrow" data-pose="point"><span class="qi">☝️</span><div><b>Move your hand</b><small>Moves the round dot: that is your cursor</small></div></div>
-          <div class="qrow" data-pose="pinch"><span class="qi">🤏</span><div><b>Pinch thumb + index</b><small>Click · two quick pinches = double click</small></div></div>
-          <div class="qrow" data-pose="fist"><span class="qi">✊</span><div><b>Fist + move</b><small>Grab and drag (folders, windows) · open the hand to drop</small></div></div>
-          <div class="qrow" data-pose="rclick"><span class="qi">🤌</span><div><b>Pinch thumb + middle</b><small>Right click</small></div></div>
-          <div class="qrow" data-pose="scroll"><span class="qi">✌️</span><div><b>Index + middle up</b><small>Scroll: move the hand up or down</small></div></div>
-          <div class="qrow" data-pose="pinkypinch"><span class="qi">🤙</span><div><b>Thumb + little finger, held</b><small>Minimise the window under the cursor (index up)</small></div></div>
-          <div class="qrow" data-pose="ringpinch"><span class="qi">👌</span><div><b>Thumb + ring finger, held</b><small>Launcher with big tiles (index up)</small></div></div>
+          <div class="qrow key" data-pose="open"><span class="qi" data-icon="open"></span><div><b>Open hand, held still</b><small>Activate (<span id="qAct">1.6 s</span>) or pause (<span id="qPause">0.9 s</span>): watch the bar fill up. At start, control turns on by itself when your hand is seen</small></div></div>
+          <div class="qrow" data-pose="point"><span class="qi" data-icon="point"></span><div><b>Move your hand</b><small>Moves the round dot: that is your cursor</small></div></div>
+          <div class="qrow" data-pose="pinch"><span class="qi" data-icon="pinch"></span><div><b>Pinch thumb + index</b><small>Click · two quick pinches = double click</small></div></div>
+          <div class="qrow" data-pose="fist"><span class="qi" data-icon="fistmove"></span><div><b>Fist + move</b><small>Grab and drag (folders, windows) · open the hand to drop</small></div></div>
+          <div class="qrow" data-pose="rclick"><span class="qi" data-icon="rclick"></span><div><b>Pinch thumb + middle</b><small>Right click</small></div></div>
+          <div class="qrow" data-pose="scroll"><span class="qi" data-icon="scroll"></span><div><b>Index + middle up</b><small>Scroll: move the hand up or down</small></div></div>
+          <div class="qrow" data-pose="pinkypinch"><span class="qi" data-icon="pinkypinch"></span><div><b>Thumb + little finger, held</b><small>Minimise the window under the cursor (index up)</small></div></div>
+          <div class="qrow" data-pose="ringpinch"><span class="qi" data-icon="ringpinch"></span><div><b>Thumb + ring finger, held</b><small>Launcher with big tiles (index up)</small></div></div>
         </div>
         <p class="hint">Stand 1–3 m from the camera. Not accurate? Calibrate the movement area. To stop everything: the red button or the keyboard shortcut.</p>
         <div class="row"><button id="btnCalib" class="btn primary">🎯 Calibrate the movement area</button></div>
@@ -99,15 +99,15 @@
       <div class="card gestures">
         <h3>Gestures</h3>
         <table>
-          <tr><td>🖐️ <b>Your hand</b></td><td>Moves the cursor (the centre of the palm steers it). The round dot on screen is the cursor</td></tr>
-          <tr><td>🤏 <b>Pinch thumb + index</b></td><td>Left click. Held and moved = drag; two pinches = double click</td></tr>
-          <tr><td>🤏 <b>Pinch thumb + middle</b></td><td>Right click</td></tr>
-          <tr><td>✌️ <b>Index + middle up</b></td><td>Scroll: move your hand up/down</td></tr>
-          <tr><td>🤏 <b>Thumb + ring finger, held</b></td><td>Action 1 (default: the launcher with big tiles). Keep your index finger up</td></tr>
-          <tr><td>✊ <b>Closed fist + move</b></td><td><b>Grab and drag</b> what is under the cursor (a folder, a window); open the hand to drop it. A still fist does nothing</td></tr>
-          <tr><td>🤏 <b>Thumb + little finger, held</b></td><td>Action 2 (default: minimise the window under the cursor). Both are configurable in Settings → Actions</td></tr>
-          <tr><td>🙌 <b>Two hands</b></td><td>Optional (Settings → advanced): one hand steers the cursor, the other clicks, drags and scrolls</td></tr>
-          <tr><td>🖐️ <b>Open hand, held still</b></td><td>Pause / resume (the bar fills up). Control also starts by itself when your hand is first seen</td></tr>
+          <tr><td><span class="ti" data-icon="point"></span><b>Your hand</b></td><td>Moves the cursor (the centre of the palm steers it). The round dot on screen is the cursor</td></tr>
+          <tr><td><span class="ti" data-icon="pinch"></span><b>Pinch thumb + index</b></td><td>Left click. Held and moved = drag; two pinches = double click</td></tr>
+          <tr><td><span class="ti" data-icon="rclick"></span><b>Pinch thumb + middle</b></td><td>Right click</td></tr>
+          <tr><td><span class="ti" data-icon="scroll"></span><b>Index + middle up</b></td><td>Scroll: move your hand up/down</td></tr>
+          <tr><td><span class="ti" data-icon="ringpinch"></span><b>Thumb + ring finger, held</b></td><td>Action 1 (default: the launcher with big tiles). Keep your index finger up</td></tr>
+          <tr><td><span class="ti" data-icon="fistmove"></span><b>Closed fist + move</b></td><td><b>Grab and drag</b> what is under the cursor (a folder, a window); open the hand to drop it. A still fist does nothing</td></tr>
+          <tr><td><span class="ti" data-icon="pinkypinch"></span><b>Thumb + little finger, held</b></td><td>Action 2 (default: minimise the window under the cursor). Both are configurable in Settings → Actions</td></tr>
+          <tr><td><span class="ti" data-icon="two"></span><b>Two hands</b></td><td>Optional (Settings → advanced): one hand steers the cursor, the other clicks, drags and scrolls</td></tr>
+          <tr><td><span class="ti" data-icon="open"></span><b>Open hand, held still</b></td><td>Pause / resume (the bar fills up). Control also starts by itself when your hand is first seen</td></tr>
           <tr><td>⌨️ <b>Ctrl+Alt+K</b></td><td>EMERGENCY LOCK from the keyboard (again = unlock, into pause)</td></tr>
         </table>
         <p class="hint">Tip: rest your elbow and move your forearm and wrist. To click, don't hesitate: pinch and release decisively.</p>
