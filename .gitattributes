@@ -1,0 +1,5 @@
+# GitHub language statistics: count the pages (HTML/CSS), not the scripts, so the repository shows as HTML like the
+# other Ale Studios projects. The code is still all here and still MIT-licensed; this only changes the coloured dot.
+*.js  linguist-detectable=false
+*.mjs linguist-detectable=false
+*.cjs linguist-detectable=false
