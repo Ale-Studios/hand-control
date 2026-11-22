@@ -11,6 +11,10 @@ const run = (cmd, args) => {
   if (r.status !== 0) { console.error(`\nERROR: "${cmd} ${args.join(' ')}" failed.`); process.exit(r.status || 1); }
 };
 run('node', ['scripts/vendor.cjs']);
-run('node', ['scripts/gen-icon.cjs']);
+{ // the icon is drawn from assets/icon.svg by Electron itself (no external tool)
+  const env = { ...process.env }; delete env.ELECTRON_RUN_AS_NODE;
+  const r = spawnSync(require('electron'), ['scripts/gen-icon.cjs'], { cwd: root, stdio: 'inherit', env });
+  if (r.status !== 0) { console.error('ERROR: the icon could not be generated.'); process.exit(r.status || 1); }
+}
 run('npx', ['electron-builder', '--win', installer ? 'nsis' : 'dir', '--publish', 'never']);
 console.log(installer ? '\nInstaller in dist\\' : '\nApp in dist\\win-unpacked\\Hand Control.exe');

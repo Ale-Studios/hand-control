@@ -13,7 +13,7 @@
     "test": "node --test test/*.test.mjs",
     "test:e2e": "node test/e2e/launch.cjs",
     "bench:camera": "node scripts/bench.cjs",
-    "icon": "node scripts/gen-icon.cjs",
+    "icon": "electron scripts/gen-icon.cjs",
     "build": "node scripts/build.cjs",
     "dist": "node scripts/build.cjs --installer"
   },
@@ -55,5 +55,13 @@
       "installerHeaderIcon": "build/icon.ico"
     },
     "afterPack": "scripts/afterPack.cjs"
+  },
+  "homepage": "https://ale-studios.github.io/hand-control/",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Ale-Studios/hand-control.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Ale-Studios/hand-control/issues"
   }
 }

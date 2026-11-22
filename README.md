@@ -1,14 +1,23 @@
+<p align="center"><img src="docs/assets/icon.png" width="96" alt="Hand Control icon"></p>
+
 # Hand Control
 
 Control your PC **with your hands**, without touching a mouse or keyboard, even from a few metres away.
 A camera watches your hand; **everything stays on your PC** (no internet, no cloud, no recordings).
 
-**Simple by default:** show one hand and it just works — your hand is the cursor, a pinch clicks, a closed fist grabs and drags.
+**Simple by default:** show one hand and it just works — your hand is the cursor, a pinch clicks, a closed fist moves windows.
 The two-hand mode and the fine-tuning settings are still there, under *Settings → Show advanced settings*.
 
-> Status: **MVP (v0.1)**. Tested with synthetic "fake hands" along the whole chain down to the real mouse
-> (27 automatic checks passed, ~3 ms of software delay) and with a real camera (local engine on the GPU: 25 ms per frame).
-> Accuracy with a **real** hand, especially at 2–3 m, still has to be measured: see [docs/MEASUREMENTS.md](docs/MEASUREMENTS.md).
+**[⬇ Download for Windows](https://github.com/Ale-Studios/hand-control/releases/latest/download/HandControl-Setup-0.1.0.exe)** ·
+[all releases](https://github.com/Ale-Studios/hand-control/releases) · [website](https://ale-studios.github.io/hand-control/)
+— Windows 10/11, any webcam. The installer is not code-signed yet: Windows SmartScreen may ask you to confirm
+(*More info → Run anyway*).
+
+![Hand Control: the tracked hand in the camera view and the main gestures](docs/assets/screenshot-controls.png)
+
+> Status: **v0.1** (first public version). Tested end to end with synthetic "fake hands" down to the real mouse and real
+> windows (61 automatic checks) and with real hands and a real camera. Accuracy at 2–3 m depends a lot on your camera and
+> light: see [docs/MEASUREMENTS.md](docs/MEASUREMENTS.md).
 
 ## What it does
 
@@ -95,7 +104,10 @@ keyboard. The badge says TEST MODE. Good for trying gestures with no risk.
 
 ## Quick start
 
-You need **Windows 10/11** and **Node.js 20+** (for development). Then:
+**Just use it:** download the installer from the [latest release](https://github.com/Ale-Studios/hand-control/releases/latest),
+run it, open Hand Control from the Start menu.
+
+**From the sources** you need **Windows 10/11** and **Node.js 20+**. Then:
 
 ```bash
 npm install

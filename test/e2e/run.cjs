@@ -5,6 +5,7 @@ const fs = require('fs');
 const { pathToFileURL } = require('url');
 const { performance } = require('perf_hooks');
 const { BrowserWindow, ipcMain, screen, app, session } = require('electron');
+app.setVersion(require('../../package.json').version); // the window shows the app version, not Electron's
 
 process.env.HC_E2E = '1';
 const ONLY = (process.env.HC_E2E_ONLY || '').split(',').filter(Boolean);
