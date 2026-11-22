@@ -253,7 +253,8 @@ function createWindow() {
   win.on('maximize', winState); win.on('unmaximize', winState); win.on('restore', winState);
   win.on('maximize', applyTop); win.on('unmaximize', applyTop);
   // maximised = backdrop: when it gets the focus (a click on it, the taskbar) it goes straight back under the other apps
-  win.on('focus', () => { if (win && !win.isDestroyed() && win.isMaximized()) setTimeout(sendToBack, 0); });
+  win.on('focus', () => { if (win && !win.isDestroyed() && win.isMaximized()) setTimeout(sendToBack, 0); raiseOverlays(); });
+  for (const ev of ['show', 'restore', 'maximize', 'unmaximize', 'always-on-top-changed']) win.on(ev, () => setTimeout(raiseOverlays, 0));
   win.webContents.on('did-finish-load', winState);
   // double-click on the title bar = maximise / restore (Windows does not do it for a frameless transparent window)
   if (SEE_THROUGH) win.hookWindowMessage(0x00A3 /* WM_NCLBUTTONDBLCLK */, () => setImmediate(toggleMaximize));
@@ -360,6 +361,13 @@ function applyTop() {
   const max = win.isMaximized();
   win.setAlwaysOnTop(!max && !!settings.ui.alwaysOnTop, 'floating');
   if (max) sendToBack();
+}
+// The cursor layer and the status badge must stay above EVERY window, this app's own window included. Among "always on top"
+// windows Windows puts the one just activated first, so they are put back on top when that happens (and once a second anyway).
+function raiseOverlays() {
+  for (const w of [handOv, overlay]) {
+    if (w && !w.isDestroyed() && w.isVisible()) { try { w.moveTop(); } catch { /* closing */ } }
+  }
 }
 function sendToBack() {
   if (!win || win.isDestroyed() || !win.isMaximized()) return;
@@ -475,9 +483,24 @@ function wireIpc() {
     const dry = !!settings.safety.dryRun; // test mode: say what would happen, touch nothing
     let done = false;
     switch (m.type) {
-      case 'move': if (active) done = dry ? dryNote(m) : input.moveNorm(+m.x, +m.y); break;
-      case 'down': if (active) done = dry ? dryNote(m) : input.button(m.button === 'right' ? 'right' : 'left', true); break;
-      case 'up': if (!dry) input.button(m.button === 'right' ? 'right' : 'left', false); else dryNote(m); done = true; break;
+      case 'move':
+        if (active) { done = dry ? dryNote(m) : input.moveNorm(+m.x, +m.y); if (done && input.winMove) input.moveGrabbedWindow(); }
+        break;
+      case 'down':
+        if (!active) break;
+        if (dry) { done = dryNote(m); break; }
+        if (m.grab === 'fist') {
+          // closed fist: move the whole window under the cursor (this app's own maximised backdrop is never grabbed)
+          const skip = win && !win.isDestroyed() && win.isMaximized() ? win.getNativeWindowHandle().readBigUInt64LE() : null;
+          const r = input.beginWindowMove(skip);
+          if (r === 'moving') { addLog(`Fist: moving the window "${input.winMove.title}"`); done = true; break; }
+          if (r === 'skip') { done = true; break; }
+        }
+        done = input.button(m.button === 'right' ? 'right' : 'left', true);
+        break;
+      case 'up':
+        if (input.endWindowMove()) { done = true; break; }
+        if (!dry) input.button(m.button === 'right' ? 'right' : 'left', false); else dryNote(m); done = true; break;
       case 'click': if (active) done = dry ? dryNote(m) : input.click(m.button === 'right' ? 'right' : 'left'); break;
       case 'wheel': if (active) done = dry ? dryNote(m) : input.wheel(+m.delta || 0); break;
       case 'action': if (active && (m.which === 'ring' || m.which === 'pinky')) done = actions.runGesture(m.which); break;
@@ -592,6 +615,7 @@ if (!gotLock) {
     startWatchdog();
     if (!E2E) input.showSystemCursor(); // a previous run may have been killed while the arrow was hidden
     setInterval(syncArrow, 250);
+    setInterval(raiseOverlays, 1000);
     process.on('exit', () => { try { input.showSystemCursor(); } catch { /* ok */ } });
     if (BENCH) {
       setTimeout(() => app.getGPUInfo('basic')

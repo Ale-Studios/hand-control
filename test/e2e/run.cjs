@@ -465,18 +465,20 @@ setTimeout(() => { console.error('Test TIMEOUT: exiting'); try { require('../../
     check('a pinch held on a title bar drags the whole window (moved ~300,150)', Math.abs(mx - 300) <= 60 && Math.abs(my - 150) <= 60, 'window moved by ' + mx + ',' + my + ' px');
     check('…and it is dropped when the pinch opens (window stays put afterwards)', stayed && !input.isDown(1));
 
-    // the same with a closed FIST: close the hand on the title bar, carry, open the hand
+    // a closed FIST moves the WHOLE window from anywhere on it (here: its content, not the title bar), without pressing
+    // the mouse button (so no text can be selected)
     const s2 = { ...lastBounds };
-    const grab2 = screen.dipToScreenPoint({ x: s2.x + 190, y: s2.y + 30 });
+    const grab2 = screen.dipToScreenPoint({ x: s2.x + 190, y: s2.y + 150 });
     const drop2 = { x: grab2.x - 250, y: grab2.y + 120 };
     const [g2x, g2y] = sxy(grab2), [d2x, d2y] = sxy(drop2);
     await drive(1200, () => hand('point', g2x, g2y)); await sleep(100);
-    await drive(1800, (ms) => { const k = Math.min(1, Math.max(0, (ms - 450) / 900)); return hand('fist', g2x + (d2x - g2x) * k, g2y + (d2y - g2y) * k); });
+    let pressed = false;
+    await drive(1800, (ms) => { if (input.isDown(1)) pressed = true; const k = Math.min(1, Math.max(0, (ms - 450) / 900)); return hand('fist', g2x + (d2x - g2x) * k, g2y + (d2y - g2y) * k); });
     await drive(500, () => hand('point', d2x, d2y)); await sleep(500);
     const e2 = lastBounds;
     const fx = Math.round((e2.x - s2.x) * sf), fy = Math.round((e2.y - s2.y) * sf);
-    check('a closed FIST moved over a title bar grabs and drags the window (moved ~-250,120)', Math.abs(fx + 250) <= 60 && Math.abs(fy - 120) <= 60, 'window moved by ' + fx + ',' + fy + ' px');
-    check('…and opening the hand drops it', !input.isDown(1));
+    check('a closed FIST moved over a window (its content) moves the whole window (~-250,120)', Math.abs(fx + 250) <= 60 && Math.abs(fy - 120) <= 60, 'window moved by ' + fx + ',' + fy + ' px');
+    check('…without ever pressing the mouse button (no text selection), and it is left there when the hand opens', !pressed && !input.isDown(1) && !input.winMove);
   }
   try { child.kill(); } catch { /* ok */ }
   await sleep(300);

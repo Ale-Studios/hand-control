@@ -44,6 +44,7 @@ const GetWindowLongPtrW = user32.func('intptr_t GetWindowLongPtrW(void *h, int i
 const GetClassNameW = user32.func('int GetClassNameW(void *h, _Out_ uint16_t *buf, int n)');
 const GetWindowTextW = user32.func('int GetWindowTextW(void *h, _Out_ uint16_t *buf, int n)');
 const PostMessageW = user32.func('bool PostMessageW(void *h, unsigned int m, uintptr_t w, intptr_t l)');
+const ShowWindow = user32.func('bool ShowWindow(void *h, int cmd)');
 const SetWindowPos = user32.func('bool SetWindowPos(void *h, intptr_t after, int x, int y, int cx, int cy, unsigned int flags)');
 const DwmGetWindowAttribute = koffi.load('dwmapi.dll').func('int DwmGetWindowAttribute(void *h, unsigned int attr, _Out_ int *v, unsigned int cb)');
 const SHELL_CLASSES = new Set(['Progman', 'WorkerW', 'Shell_TrayWnd', 'Shell_SecondaryTrayWnd']); // desktop and taskbar: never touched
@@ -96,6 +97,7 @@ function sendMouse(flags, data = 0, dx = 0, dy = 0) {
 class Input {
   constructor() {
     this.buttons = new Set();   // mouse buttons that we pressed ourselves
+    this.winMove = null;        // the window being moved by a closed fist
     this.keysDown = new Set();  // keyboard keys that we pressed ourselves (always released)
     this.screen = null;         // rectangle (in physical pixels) of the target screen
     this.lastPos = null;        // where we last put the cursor
@@ -162,13 +164,50 @@ class Input {
     return w.title || w.cls;
   }
 
-  /** true while the physical mouse has been used recently (control gives way, the arrow must be visible again). */
   /** Puts a window (native handle Buffer from Electron) at the BOTTOM of the z-order, under every other app, without activating it. */
   sendToBack(handleBuf) {
     const hwnd = koffi.decode(handleBuf, 'void *'); // the buffer holds the HWND value
     return SetWindowPos(hwnd, 1 /* HWND_BOTTOM */, 0, 0, 0, 0, 0x0213 /* NOSIZE|NOMOVE|NOACTIVATE|NOOWNERZORDER */);
   }
 
+  /**
+   * Closed-fist grab: starts moving the WHOLE window under the cursor, from wherever the cursor is on it (like dragging its
+   * title bar; no mouse button is pressed, so no text gets selected). A maximised window is restored first, as Windows does.
+   * skip = handle (BigInt) of a window that must not be grabbed (this app's own window while it is the maximised backdrop).
+   * Returns 'moving', 'skip' (that window: do nothing) or null (no window here: the caller falls back to a normal mouse drag).
+   */
+  beginWindowMove(skip = null) {
+    const w = this.windowAtCursor();
+    if (!w) return null;
+    if (skip != null && BigInt(koffi.address(w.h)) === BigInt(skip)) return 'skip';
+    let c = this.cursor();
+    const r = {};
+    if (IsZoomed(w.h)) {
+      GetWindowRect(w.h, r);
+      const fx = (c.x - r.left) / Math.max(1, r.right - r.left);
+      ShowWindow(w.h, 9 /* SW_RESTORE */);
+      const n = {}; GetWindowRect(w.h, n);
+      const ww = n.right - n.left;
+      // keep the cursor at the same place across the width, just below the top edge
+      SetWindowPos(w.h, 0, Math.round(c.x - fx * ww), c.y - 16, 0, 0, 0x0015 /* NOSIZE|NOZORDER|NOACTIVATE */);
+    }
+    GetWindowRect(w.h, r);
+    SetWindowPos(w.h, 0 /* HWND_TOP */, 0, 0, 0, 0, 0x0013 /* NOSIZE|NOMOVE|NOACTIVATE: bring it to the front */);
+    this.winMove = { h: w.h, x: r.left, y: r.top, c0: c, title: w.title || w.cls };
+    return 'moving';
+  }
+
+  /** Called after each cursor move while a window is grabbed: the window follows the cursor. */
+  moveGrabbedWindow() {
+    const g = this.winMove;
+    if (!g) return false;
+    const c = this.cursor();
+    return SetWindowPos(g.h, 0, g.x + c.x - g.c0.x, g.y + c.y - g.c0.y, 0, 0, 0x0015 /* NOSIZE|NOZORDER|NOACTIVATE */);
+  }
+
+  endWindowMove() { const was = !!this.winMove; this.winMove = null; return was; }
+
+  /** true while the physical mouse has been used recently (control gives way, the arrow must be visible again). */
   suspended(now = Date.now()) { return now < this.suspendUntil; }
 
   virtual() {
@@ -252,6 +291,7 @@ class Input {
   }
 
   releaseAll() {
+    this.winMove = null; // a grabbed window is simply left where it is
     for (const b of [...this.buttons]) this.button(b, false);
     for (const vk of [...this.keysDown].reverse()) { SendInput(1, [kbd(vk, false)], SIZE); this.keysDown.delete(vk); }
   }

@@ -19,7 +19,7 @@ The two-hand mode and the fine-tuning settings are still there, under *Settings 
 | 🤏 **Pinch thumb + middle** | right click |
 | ✌️ **Index + middle up** | scroll: move your hand up/down |
 | 🤏 **Thumb + ring finger, held ½ s** (index up) | **action 1**: by default the launcher (big tiles) |
-| ✊ **Closed fist + move** | **grab and drag** what is under the cursor (a folder, a window); open the hand to drop it. A still fist does nothing (it never clicks) |
+| ✊ **Closed fist + move** | **moves the whole window** under the cursor, from anywhere on it (no text gets selected); on the desktop it drags the icon. Open the hand to drop. A still fist does nothing (it never clicks) |
 | 🤏 **Thumb + little finger, held ½ s** (index up) | **action 2**: by default **minimises the window under the cursor** |
 | 🖐️ **Open hand, held still** | pause / resume (progress bar). Control also **starts by itself** the first time your hand is seen |
 | ⌨️ **Ctrl+Alt+K** | **emergency lock** from the keyboard (again = unlock, into pause). If another app owns that shortcut, Hand Control uses **Ctrl+Alt+Shift+K** and shows which one |
@@ -66,9 +66,10 @@ rejected instead of saved.
 **Two-hand mode** (*Settings → Show advanced settings → Cursor*; off by default). One hand steers the cursor, the other clicks, drags and scrolls, so you can click without
 holding the pointing hand still. A fist or an open hand on the helper hand does nothing.
 
-**Dragging windows and files.** The easiest way: point at a title bar (or a file), **close your hand into a fist and move it**: the
-window follows; **open the hand to drop it**. The fist grabs where the cursor was just before your hand closed, and only once the
-hand moves, so a fist alone never clicks. Or with a pinch: **pinch and keep pinching** for a moment (~0.3 s), move, open the pinch.
+**Moving windows and dragging files.** To move a window: point **anywhere on it**, **close your hand into a fist and move it**: the
+whole window follows (a maximised one is restored first, as Windows does); **open the hand to drop it**. The fist never presses the
+mouse button, so it cannot select text, and it grabs only once the hand moves, so a fist alone does nothing. On the desktop (no
+window there) the fist drags the icon. To drag a file or select text: **pinch and keep pinching** for a moment (~0.3 s), move, open the pinch.
 While you carry something, switching between pinch and fist keeps holding it. The dot turns red and the label says DRAGGING.
 Details that make this reliable:
 - the click lands where you were aiming *just before* the pinch (*Settings → Clicks → Aim look-back*), so the pinch itself does not

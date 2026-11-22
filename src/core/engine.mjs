@@ -9,8 +9,8 @@
 //   Pinch thumb + index ............... left button (pinch = down, open = up; held and moved = drag)
 //   Pinch thumb + middle .............. right click
 //   Index + middle up ("V" sign) ...... scroll (move the hand up/down)
-//   Closed fist, moved ................ GRAB and drag (closes on the point under the cursor, opens = drop). A fist alone,
-//                                       without moving, does nothing: it never clicks
+//   Closed fist, moved ................ GRAB: moves the whole window under the cursor, from anywhere on it (on the desktop:
+//                                       drags the icon). Open the hand = drop. A still fist does nothing: it never clicks
 //   Pinch thumb + ring, held .......... action 1 (by default: the launcher)
 //   Pinch thumb + pinky, held ......... action 2 (by default: minimise the window under the cursor)
 //   Open hand held still .............. activate / pause
@@ -493,7 +493,9 @@ export class GestureEngine {
       const a = this.fistArm.at, p0 = this.fistArm.palm;
       if (Math.hypot((this.palm.x - p0.x) * this.screen.w, (this.palm.y - p0.y) * this.screen.h) > FIST_DRAG_PX) {
         this.emit({ type: 'move', x: a.x, y: a.y, meta: this.meta });
-        this.emit({ type: 'down', button: 'left', meta: this.meta });
+        // grab: 'fist' = the main process moves the whole window under the cursor (no button press, no text selection);
+        // where there is no window (the desktop) it falls back to a normal mouse drag
+        this.emit({ type: 'down', button: 'left', grab: 'fist', meta: this.meta });
         // a short still moment after the press (Windows needs it to "take" a title bar or a file), then the drag starts
         this.pressed = 'left'; this.pressOwner = 'main'; this.pressT = t - Math.max(0, S.clicks.dragFreezeMs - FIST_SETTLE_MS);
         this.freezePos = { ...a }; this.dragging = false; this.dragPos = { ...a };

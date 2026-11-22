@@ -173,7 +173,7 @@ function onEngineEvent(e) {
   if ((cal.active || jitter.active) && e.type !== 'up') return;
   const m = { type: e.type };
   if (e.type === 'move') { m.x = e.x; m.y = e.y; }
-  else if (e.type === 'down' || e.type === 'up' || e.type === 'click') m.button = e.button;
+  else if (e.type === 'down' || e.type === 'up' || e.type === 'click') { m.button = e.button; if (e.grab) m.grab = e.grab; }
   else if (e.type === 'wheel') m.delta = e.delta;
   else if (e.type === 'action') m.which = e.which;
   if (e.meta) m.meta = { tSend: e.meta.tSend, tCap: e.meta.tCapEpoch };
